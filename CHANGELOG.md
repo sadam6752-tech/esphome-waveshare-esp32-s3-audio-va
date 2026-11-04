@@ -2,6 +2,11 @@
 
 ## [Unreleased]
 
+## [1.3.0] - 2026-11-04
+
+First release of this fork: ready-made firmware from the install page
+https://sadam6752-tech.github.io/esphome-waveshare-esp32-s3-audio-va/
+
 ### Added
 - **Optional touch display.** `base/display.yaml` drives the Waveshare
   2.8inch Capacitive Touch LCD on the LCD connector: clock and date, the
