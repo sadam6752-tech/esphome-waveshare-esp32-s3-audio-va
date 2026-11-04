@@ -110,7 +110,8 @@ display:
       number: 0
     data_rate: 40MHz
     invert_colors: true
-    color_order: rgb
+    # this panel takes blue first (with rgb, red and blue came out swapped)
+    color_order: bgr
     dimensions:
       width: 240
       height: 320
@@ -532,13 +533,13 @@ lvgl:
                 text_font: font_text
                 text_color: 0xFFFFFF
                 text: ""
-      # A new firmware is being written: do not switch off.
+      # A new firmware is being written: do not switch off (blue).
       - obj:
           id: ota_box
           hidden: true
           width: 100%
           height: 100%
-          bg_color: 0xB91C1C
+          bg_color: 0x1D4ED8
           bg_opa: COVER
           border_width: 0
           radius: 0
@@ -564,7 +565,7 @@ lvgl:
                 min_value: 0
                 max_value: 100
                 value: 0
-                bg_color: 0x7F1D1D
+                bg_color: 0x1E3A8A
                 indicator:
                   bg_color: 0xFFFFFF
             - label:
@@ -574,13 +575,13 @@ lvgl:
                 text_font: font_text
                 text_color: 0xFFFFFF
                 text: ""
-      # A ringing timer or alarm: a touch anywhere stops it.
+      # A ringing timer or alarm: a touch anywhere stops it (orange).
       - obj:
           id: ring_box
           hidden: true
           width: 100%
           height: 100%
-          bg_color: 0xB91C1C
+          bg_color: 0xEA580C
           bg_opa: COVER
           border_width: 0
           radius: 0
@@ -600,7 +601,7 @@ lvgl:
                 align: BOTTOM_MID
                 y: -6
                 text_font: font_text
-                text_color: 0xFECACA
+                text_color: 0xFFEDD5
                 text: ""
   pages:
     - id: page_clock

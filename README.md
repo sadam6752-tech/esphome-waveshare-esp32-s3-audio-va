@@ -267,7 +267,7 @@ Other pages fall back to the clock after a minute without a touch.
   answer of the assistant comes as an announcement with its text on the
   screen. Older versions of the assistant ignore the touch.
 - **Volume**: a bar for two seconds whenever the volume changes.
-- **Ringing**: a ringing timer or alarm fills the screen with a red "Stop";
+- **Ringing**: a ringing timer or alarm fills the screen with an orange "Stop";
   a touch anywhere silences it, like the Play/Pause button.
 - **System** (swipe right): the firmware version (the release, or the build
   date of a build of your own), Wi-Fi with signal, IP, uptime, free memory, the
@@ -275,7 +275,7 @@ Other pages fall back to the clock after a minute without a touch.
   release: without one a message says that the latest firmware is installed;
   with one it asks Yes/No and installs it over the air (ready-made firmware
   only). While any new firmware is written - from the screen, from ioBroker or
-  from ESPHome - a red screen asks not to unplug the device and shows the
+  from ESPHome - a blue screen asks not to unplug the device and shows the
   progress.
 - **Values** (swipe left): four tiles with numbers that something else writes
   into the entities **Value 1** ... **Value 4** (see below).

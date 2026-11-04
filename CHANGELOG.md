@@ -2,6 +2,15 @@
 
 ## [Unreleased]
 
+## [1.3.4] - 2026-11-04
+
+### Fixed
+- **Display colors.** The panel takes blue first: with `color_order: rgb` red
+  and blue came out swapped. Now `bgr`.
+
+### Changed
+- The screen while a firmware is written is blue, the ringing screen orange.
+
 ## [1.3.3] - 2026-11-04
 
 ### Added
