@@ -89,6 +89,7 @@ micro_wake_word:
 time:
   - id: !extend rtc
     platform: sntp
+    timezone: ${posix_timezone}
     servers:
       - 0.pool.ntp.org
       - 1.pool.ntp.org
