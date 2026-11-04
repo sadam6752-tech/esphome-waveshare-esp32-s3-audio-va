@@ -271,12 +271,12 @@ Other pages fall back to the clock after a minute without a touch.
   a touch anywhere silences it, like the Play/Pause button.
 - **System** (swipe right): the firmware version (the release, or the build
   date of a build of your own), Wi-Fi with signal, IP, uptime, free memory, the
-  connection to the assistant. **Firmware-Update** (top right) looks for a new
+  connection to the assistant. **FW Update** (top right) looks for a new
   release: without one a message says that the latest firmware is installed;
   with one it asks Yes/No and installs it over the air (ready-made firmware
   only). While any new firmware is written - from the screen, from ioBroker or
   from ESPHome - a blue screen asks not to unplug the device and shows the
-  progress.
+  progress. **Restart** (bottom right) restarts the device after a Yes.
 - **Values** (swipe left): four tiles with numbers that something else writes
   into the entities **Value 1** ... **Value 4** (see below).
 - **Switches** (swipe left once more): four tiles for the entities

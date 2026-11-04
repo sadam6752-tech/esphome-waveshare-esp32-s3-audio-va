@@ -53,6 +53,18 @@ ota:
   - platform: http_request
     id: ota_http
 
+# Restart from ioBroker: assistant does not show ESPHome buttons (the core's Restart), but switches.
+switch:
+  - platform: template
+    id: reboot_switch
+    name: Reboot
+    icon: mdi:restart
+    entity_category: config
+    restore_mode: ALWAYS_OFF
+    turn_on_action:
+      - delay: 1s
+      - lambda: App.safe_reboot();
+
 update:
   - platform: http_request
     id: firmware_update

@@ -477,10 +477,18 @@ lvgl:
                 bg_color: 0x15803D
                 on_click:
                   - lambda: |-
+                      lv_obj_add_flag(id(fw_box), LV_OBJ_FLAG_HIDDEN);
+                      if (id(fw_question_action) == 2) {
+                        size_t lang = id(display_language).active_index().value_or(0) % 3;
+                        static const char *const t_rs[] = {"Neustart ...", "Restarting ...", "Перезапуск ..."};
+                        id(show_toast).execute(t_rs[lang]);
+                        lv_refr_now(nullptr);
+                        id(restart_soon).execute();
+                        return;
+                      }
                       #ifdef USE_UPDATE
                       if (!App.get_updates().empty()) {
                         ESP_LOGI("fw_ui", "Installing the update");
-                        lv_obj_add_flag(id(fw_box), LV_OBJ_FLAG_HIDDEN);
                         id(show_ota_screen).execute(0);
                         App.get_updates()[0]->perform();
                       }
@@ -706,9 +714,11 @@ lvgl:
         - button:
             id: btn_fw
             align: TOP_RIGHT
-            x: -46
-            y: 6
-            height: 36
+            x: -10
+            y: 8
+            width: 104
+            height: 32
+            pad_all: 2
             bg_color: 0x1E293B
             on_click:
               - script.execute: fw_check
@@ -718,7 +728,34 @@ lvgl:
                   align: CENTER
                   text_font: font_small
                   text_color: 0xFFFFFF
-                  text: "Firmware-Update"
+                  text: "FW Update"
+        - button:
+            id: btn_restart
+            align: BOTTOM_RIGHT
+            x: -10
+            y: -8
+            width: 104
+            height: 32
+            pad_all: 2
+            bg_color: 0x1E293B
+            on_click:
+              # ask first: a touch by mistake should not restart the device
+              - lambda: |-
+                  size_t lang = id(display_language).active_index().value_or(0) % 3;
+                  static const char *const t_ask[] = {"Gerät jetzt neu starten?", "Restart the device now?",
+                                                      "Перезапустить устройство сейчас?"};
+                  id(fw_question_action) = 2;
+                  lv_label_set_text(id(lbl_fw_question), t_ask[lang]);
+                  lv_obj_clear_flag(id(btn_fw_yes), LV_OBJ_FLAG_HIDDEN);
+                  lv_obj_clear_flag(id(btn_fw_no), LV_OBJ_FLAG_HIDDEN);
+                  lv_obj_clear_flag(id(fw_box), LV_OBJ_FLAG_HIDDEN);
+            widgets:
+              - label:
+                  id: lbl_restart_button
+                  align: CENTER
+                  text_font: font_small
+                  text_color: 0xFFFFFF
+                  text: "Neustart"
 
     - id: page_values
       bg_color: 0x000000
@@ -1261,6 +1298,11 @@ globals:
     type: uint32_t
     restore_value: false
     initial_value: '0xFFFFFFFF'
+  # what Yes in the question box does: 1 = install the update, 2 = restart
+  - id: fw_question_action
+    type: int
+    restore_value: false
+    initial_value: '1'
   - id: fw_check_started
     type: uint32_t
     restore_value: false
@@ -1324,6 +1366,8 @@ interval:
             static const char *const t_no_b[] = {"Nein", "No", "Нет"};
             lv_label_set_text(id(lbl_fw_yes), t_yes_b[lang]);
             lv_label_set_text(id(lbl_fw_no), t_no_b[lang]);
+            static const char *const t_restart[] = {"Neustart", "Restart", "Перезапуск"};
+            lv_label_set_text(id(lbl_restart_button), t_restart[lang]);
           }
 
           // the running timers: one with its name, several as T1, T2, ...
@@ -1474,6 +1518,7 @@ interval:
                                                 "Доступна новая прошивка %s (установлена: %s).\n\nОбновить?"};
             char buf[200];
             snprintf(buf, sizeof(buf), t_new[lang], info.latest_version.c_str(), info.current_version.c_str());
+            id(fw_question_action) = 1;
             lv_label_set_text(id(lbl_fw_question), buf);
             lv_obj_clear_flag(id(btn_fw_yes), LV_OBJ_FLAG_HIDDEN);
             lv_obj_clear_flag(id(btn_fw_no), LV_OBJ_FLAG_HIDDEN);
@@ -1493,7 +1538,7 @@ interval:
           }
           if (done) {
             id(fw_check_started) = 0;
-            lv_label_set_text(id(lbl_fw_button), "Firmware-Update");
+            lv_label_set_text(id(lbl_fw_button), "FW Update");
           }
           #endif
       # no Wi-Fi a while after the start (a new device, or the network is gone): open the Wi-Fi page once
@@ -1770,6 +1815,11 @@ voice_assistant:
     - script.execute: dialog_hide
 
 script:
+  # Restart after the message was drawn.
+  - id: restart_soon
+    then:
+      - delay: 1s
+      - lambda: App.safe_reboot();
   # The OTA screen: percent 0..100 while writing, -1 when it failed.
   - id: show_ota_screen
     mode: restart

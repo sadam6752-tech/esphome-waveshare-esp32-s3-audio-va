@@ -2,6 +2,17 @@
 
 ## [Unreleased]
 
+## [1.3.6] - 2026-11-04
+
+### Added
+- **Restart** on the system page (bottom right, asks first), and a **Reboot**
+  switch in the ready-made firmware: ioBroker.assistant does not show ESPHome
+  buttons, so the Restart button of the core is not reachable from ioBroker.
+
+### Changed
+- The update button on the system page is smaller: **FW Update**, at the
+  right edge.
+
 ## [1.3.5] - 2026-11-04
 
 ### Added
