@@ -37,6 +37,8 @@ improv_serial:
 time:
   - id: !extend rtc
     platform: sntp
+    # Without it ESPHome takes the time zone of the computer that builds the firmware: UTC on GitHub Actions
+    timezone: ${posix_timezone}
     servers:
       - 0.pool.ntp.org
       - 1.pool.ntp.org

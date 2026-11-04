@@ -2,6 +2,13 @@
 
 ## [Unreleased]
 
+## [1.3.7] - 2026-11-05
+
+### Fixed
+- **Clock one hour behind in the ready-made firmware.** The clock had no time
+  zone of its own, so ESPHome took the one of the computer that built the
+  firmware - UTC on GitHub Actions. It is now set from posix_timezone.
+
 ## [1.3.6] - 2026-11-04
 
 ### Added
