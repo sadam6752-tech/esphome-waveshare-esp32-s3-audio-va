@@ -52,6 +52,10 @@ substitutions:
   value_4_label: "Akku Büro"
   value_4_unit: "%"
   value_4_decimals: "0"
+  switch_1_label: "Licht Bad"
+  switch_2_label: "Licht Büro"
+  switch_3_label: "Licht Bad 2"
+  switch_4_label: "Testlampe"
 
   # Mic gain, LED brightness, wake-word sensitivity and the alarm are all
   # exposed as entities in Home Assistant - no need to reflash to change them.
