@@ -2,6 +2,19 @@
 
 ## [Unreleased]
 
+## [1.3.3] - 2026-11-04
+
+### Added
+- **Yes / No by touch.** A question of the assistant gets Yes / No buttons;
+  a touch sends the event Confirm answer (confirm_answer: yes / no) and stops
+  listening, the answer comes as an announcement with its text on the screen.
+  Needs ioBroker.assistant 1.4.7 or newer.
+- The text of an announcement is shown on the screen, and hidden after it
+  played.
+- **Red screen while a firmware is written** (every OTA: screen, ioBroker,
+  ESPHome): do not unplug, with a progress bar. Before, the screen froze and
+  looked as if the device hung.
+
 ## [1.3.2] - 2026-11-04
 
 ### Added

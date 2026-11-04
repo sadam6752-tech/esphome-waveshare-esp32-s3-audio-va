@@ -52,6 +52,39 @@ substitutions:
 esphome:
   includes:
     - <esp_wifi.h>
+  on_boot:
+    # While a new firmware is written the main loop is busy and the screen is not redrawn by itself:
+    # a listener of every OTA draws the warning and the progress at once (lv_refr_now).
+    - priority: -200
+      then:
+        - lambda: |-
+            #ifdef USE_OTA_STATE_LISTENER
+            struct OtaScreen : public ota::OTAGlobalStateListener {
+              int shown = -1;
+              void on_ota_global_state(ota::OTAState state, float progress, uint8_t error,
+                                       ota::OTAComponent *component) override {
+                if (state == ota::OTA_STARTED || state == ota::OTA_IN_PROGRESS) {
+                  int percent = int(progress);
+                  if (state == ota::OTA_STARTED) percent = 0;
+                  if (percent == this->shown) return;
+                  // not every percent: a redraw costs time while the firmware is written
+                  if (this->shown >= 0 && percent < 100 && percent - this->shown < 3) return;
+                  this->shown = percent;
+                  id(show_ota_screen).execute(percent);
+                } else if (state == ota::OTA_ERROR || state == ota::OTA_ABORT) {
+                  this->shown = -1;
+                  id(show_ota_screen).execute(-1);
+                }
+              }
+            };
+            static OtaScreen listener;
+            ota::get_global_ota_callback()->add_global_state_listener(&listener);
+            #endif
+
+ota:
+  - id: !extend ota_esphome
+    on_end:
+      - logger.log: "Firmware written, restarting"
 
 external_components:
   - source:
@@ -116,6 +149,14 @@ light:
     output: lcd_backlight_pwm
     restore_mode: ALWAYS_ON
     default_transition_length: 500ms
+
+event:
+  # A touch on Yes/No while the assistant waits for an answer (object id confirm_answer).
+  - platform: template
+    id: confirm_answer
+    name: "Confirm answer"
+    icon: "mdi:gesture-tap-button"
+    event_types: ["yes", "no"]
 
 switch:
   - platform: template
@@ -313,7 +354,7 @@ lvgl:
             - label:
                 id: lbl_answer
                 align: TOP_MID
-                y: 34
+                y: 30
                 width: 100%
                 long_mode: WRAP
                 text_align: CENTER
@@ -323,10 +364,48 @@ lvgl:
             - label:
                 id: lbl_hint
                 align: BOTTOM_MID
+                y: -58
                 hidden: true
-                text_font: font_text
+                text_font: font_small
                 text_color: 0x7DD3FC
                 text: ""
+            # Answer by touch (ioBroker.assistant 1.4.7+: the event confirm_answer while the question is open).
+            - button:
+                id: btn_confirm_yes
+                hidden: true
+                align: BOTTOM_LEFT
+                width: 130
+                height: 48
+                bg_color: 0x15803D
+                on_click:
+                  - script.execute:
+                      id: confirm_by_touch
+                      answer: "yes"
+                widgets:
+                  - label:
+                      id: lbl_confirm_yes
+                      align: CENTER
+                      text_font: font_text
+                      text_color: 0xFFFFFF
+                      text: "Ja"
+            - button:
+                id: btn_confirm_no
+                hidden: true
+                align: BOTTOM_RIGHT
+                width: 130
+                height: 48
+                bg_color: 0xB91C1C
+                on_click:
+                  - script.execute:
+                      id: confirm_by_touch
+                      answer: "no"
+                widgets:
+                  - label:
+                      id: lbl_confirm_no
+                      align: CENTER
+                      text_font: font_text
+                      text_color: 0xFFFFFF
+                      text: "Nein"
       # The volume while it changes.
       - obj:
           id: volume_box
@@ -400,6 +479,8 @@ lvgl:
                       #ifdef USE_UPDATE
                       if (!App.get_updates().empty()) {
                         ESP_LOGI("fw_ui", "Installing the update");
+                        lv_obj_add_flag(id(fw_box), LV_OBJ_FLAG_HIDDEN);
+                        id(show_ota_screen).execute(0);
                         App.get_updates()[0]->perform();
                       }
                       #endif
@@ -448,6 +529,48 @@ lvgl:
                 width: 100%
                 long_mode: WRAP
                 text_align: CENTER
+                text_font: font_text
+                text_color: 0xFFFFFF
+                text: ""
+      # A new firmware is being written: do not switch off.
+      - obj:
+          id: ota_box
+          hidden: true
+          width: 100%
+          height: 100%
+          bg_color: 0xB91C1C
+          bg_opa: COVER
+          border_width: 0
+          radius: 0
+          pad_all: 16
+          scrollable: false
+          widgets:
+            - label:
+                id: lbl_ota_text
+                align: TOP_MID
+                y: 10
+                width: 100%
+                long_mode: WRAP
+                text_align: CENTER
+                text_font: font_text
+                text_color: 0xFFFFFF
+                text: ""
+            - bar:
+                id: ota_bar
+                align: BOTTOM_MID
+                y: -40
+                width: 260
+                height: 14
+                min_value: 0
+                max_value: 100
+                value: 0
+                bg_color: 0x7F1D1D
+                indicator:
+                  bg_color: 0xFFFFFF
+            - label:
+                id: lbl_ota_percent
+                align: BOTTOM_MID
+                y: -6
                 text_font: font_text
                 text_color: 0xFFFFFF
                 text: ""
@@ -1308,26 +1431,13 @@ interval:
   - interval: 1s
     then:
       - lambda: id(uptime_s) += 1;
-      # the firmware update: the answer to a check, the question, the progress
+      # the firmware update: the answer to a check, the question (the progress: show_ota_screen)
       - lambda: |-
           #ifdef USE_UPDATE
           if (App.get_updates().empty()) return;
           auto *u = App.get_updates()[0];
           size_t lang = id(display_language).active_index().value_or(0) % 3;
           const auto &info = u->update_info;
-          if (u->state == update::UPDATE_STATE_INSTALLING) {
-            static const char *const t_inst[] = {"Firmware wird installiert", "Installing the firmware", "Установка прошивки"};
-            static const char *const t_wait[] = {"Nicht ausschalten.", "Do not switch off.", "Не выключайте."};
-            char buf[160];
-            if (info.has_progress) snprintf(buf, sizeof(buf), "%s %s\n\n%.0f %%\n\n%s", t_inst[lang], info.latest_version.c_str(), info.progress, t_wait[lang]);
-            else snprintf(buf, sizeof(buf), "%s %s ...\n\n%s", t_inst[lang], info.latest_version.c_str(), t_wait[lang]);
-            lv_label_set_text(id(lbl_fw_question), buf);
-            lv_obj_add_flag(id(btn_fw_yes), LV_OBJ_FLAG_HIDDEN);
-            lv_obj_add_flag(id(btn_fw_no), LV_OBJ_FLAG_HIDDEN);
-            lv_obj_clear_flag(id(fw_box), LV_OBJ_FLAG_HIDDEN);
-            id(lcd_last_touch) = millis();  // keep the light on
-            return;
-          }
           if (id(fw_check_started) == 0) return;
           uint32_t waited = millis() - id(fw_check_started);
           bool done = true;
@@ -1583,6 +1693,8 @@ voice_assistant:
         lv_label_set_text(id(lbl_heard), heard.empty() ? "" : ("«" + heard + "»").c_str());
         lv_label_set_text(id(lbl_answer), "");
         lv_obj_add_flag(id(lbl_hint), LV_OBJ_FLAG_HIDDEN);
+        lv_obj_add_flag(id(btn_confirm_yes), LV_OBJ_FLAG_HIDDEN);
+        lv_obj_add_flag(id(btn_confirm_no), LV_OBJ_FLAG_HIDDEN);
         id(dlg_answer).clear();
         id(dlg_question) = false;
         if (!heard.empty()) lv_obj_clear_flag(id(dialog_box), LV_OBJ_FLAG_HIDDEN);
@@ -1600,7 +1712,12 @@ voice_assistant:
         }
         id(dlg_answer) = text;
         lv_label_set_text(id(lbl_answer), text.c_str());
+        lv_obj_add_flag(id(lbl_hint), LV_OBJ_FLAG_HIDDEN);
+        lv_obj_add_flag(id(btn_confirm_yes), LV_OBJ_FLAG_HIDDEN);
+        lv_obj_add_flag(id(btn_confirm_no), LV_OBJ_FLAG_HIDDEN);
         if (!text.empty()) lv_obj_clear_flag(id(dialog_box), LV_OBJ_FLAG_HIDDEN);
+    # an announcement has no end of a run: hide it after it played
+    - script.execute: dialog_hide
   on_listening:
     # listening again right after a question: it waits for the reply
     - if:
@@ -1609,15 +1726,82 @@ voice_assistant:
         then:
           - script.stop: dialog_hide
           - lambda: |-
-              static const char *const hints[] = {"Sag „Ja“ oder „Nein“", "Say “yes” or “no”", "Скажите «да» или «нет»"};
-              lv_label_set_text(id(lbl_hint), hints[id(display_language).active_index().value_or(0) % 3]);
+              size_t lang = id(display_language).active_index().value_or(0) % 3;
+              static const char *const hints[] = {"Sag „Ja“ oder „Nein“ - oder tippe", "Say “yes” or “no” - or tap",
+                                                  "Скажите «да» или «нет» - или нажмите"};
+              static const char *const t_yes[] = {"Ja", "Yes", "Да"};
+              static const char *const t_no[] = {"Nein", "No", "Нет"};
+              lv_label_set_text(id(lbl_hint), hints[lang]);
+              lv_label_set_text(id(lbl_confirm_yes), t_yes[lang]);
+              lv_label_set_text(id(lbl_confirm_no), t_no[lang]);
               lv_label_set_text(id(lbl_heard), "");
               lv_obj_clear_flag(id(lbl_hint), LV_OBJ_FLAG_HIDDEN);
+              lv_obj_clear_flag(id(btn_confirm_yes), LV_OBJ_FLAG_HIDDEN);
+              lv_obj_clear_flag(id(btn_confirm_no), LV_OBJ_FLAG_HIDDEN);
               lv_obj_clear_flag(id(dialog_box), LV_OBJ_FLAG_HIDDEN);
   on_end:
     - script.execute: dialog_hide
 
 script:
+  # The OTA screen: percent 0..100 while writing, -1 when it failed.
+  - id: show_ota_screen
+    mode: restart
+    parameters:
+      percent: int
+    then:
+      - lambda: |-
+          size_t lang = id(display_language).active_index().value_or(0) % 3;
+          static const char *const t_busy[] = {
+              "Firmware wird aktualisiert!\n\nBitte das Gerät nicht vom Strom trennen. Es startet danach von selbst neu.",
+              "Updating the firmware!\n\nPlease do not unplug the device. It restarts by itself when done.",
+              "Идёт обновление прошивки!\n\nПожалуйста, не отключайте питание устройства. После обновления оно перезапустится само."};
+          static const char *const t_fail[] = {
+              "Update fehlgeschlagen.\n\nDie bisherige Firmware läuft weiter.",
+              "The update failed.\n\nThe current firmware keeps running.",
+              "Обновление не удалось.\n\nТекущая прошивка продолжает работать."};
+          if (percent < 0) {
+            lv_label_set_text(id(lbl_ota_text), t_fail[lang]);
+            lv_label_set_text(id(lbl_ota_percent), "");
+            lv_obj_add_flag(id(ota_bar), LV_OBJ_FLAG_HIDDEN);
+          } else {
+            lv_label_set_text(id(lbl_ota_text), t_busy[lang]);
+            lv_obj_clear_flag(id(ota_bar), LV_OBJ_FLAG_HIDDEN);
+            lv_bar_set_value(id(ota_bar), percent, LV_ANIM_OFF);
+            lv_label_set_text(id(lbl_ota_percent), (std::to_string(percent) + " %").c_str());
+          }
+          lv_obj_clear_flag(id(ota_box), LV_OBJ_FLAG_HIDDEN);
+          lv_obj_move_foreground(id(ota_box));
+          // full light, then draw now: the main loop is busy until the end
+          auto call = id(lcd_backlight).make_call();
+          call.set_state(true).set_brightness(1.0f).set_transition_length(0);
+          call.perform();
+          id(lcd_last_touch) = millis();
+          lv_refr_now(nullptr);
+      - if:
+          condition:
+            lambda: return percent < 0;
+          then:
+            - delay: 8s
+            - lvgl.widget.hide: ota_box
+  # Yes/No by touch: tell the assistant, stop listening; its answer comes as an announcement.
+  - id: confirm_by_touch
+    parameters:
+      answer: std::string
+    then:
+      - lambda: |-
+          ESP_LOGI("confirm", "Answer by touch: %s", answer.c_str());
+          id(confirm_answer).trigger(answer);
+          lv_obj_add_flag(id(btn_confirm_yes), LV_OBJ_FLAG_HIDDEN);
+          lv_obj_add_flag(id(btn_confirm_no), LV_OBJ_FLAG_HIDDEN);
+          lv_obj_add_flag(id(lbl_hint), LV_OBJ_FLAG_HIDDEN);
+          size_t lang = id(display_language).active_index().value_or(0) % 3;
+          static const char *const t_yes[] = {"Ja", "Yes", "Да"};
+          static const char *const t_no[] = {"Nein", "No", "Нет"};
+          bool yes = answer == "yes";
+          lv_label_set_text(id(lbl_heard), (std::string("«") + (yes ? t_yes[lang] : t_no[lang]) + "»").c_str());
+          id(dlg_question) = false;
+      - voice_assistant.stop:
+      - script.execute: dialog_hide
   # Look for a new firmware (the update entity of the ready-made firmware, base/release.yaml).
   - id: fw_check
     then:
@@ -1670,6 +1854,15 @@ script:
   - id: dialog_hide
     mode: restart
     then:
+      - delay: 2s
+      - wait_until:
+          condition:
+            and:
+              - not:
+                  voice_assistant.is_running:
+              - not:
+                  media_player.is_announcing: external_media_player
+          timeout: 3min
       - delay: 6s
       - if:
           condition:

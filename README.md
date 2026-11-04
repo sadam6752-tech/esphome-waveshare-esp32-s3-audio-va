@@ -261,8 +261,11 @@ Other pages fall back to the clock after a minute without a touch.
   a few seconds after the end. When the assistant asks something and listens
   again for the answer (for example "Turn on the lamp? Say yes or no."), a
   hint to answer by voice is added. Only a text with a "?" counts as a
-  question. There are no yes/no buttons, because a satellite cannot send a
-  text to the assistant.
+  question. With ioBroker.assistant 1.4.7 or newer the question also gets
+  **Yes / No** buttons: a touch sends the event **Confirm answer**
+  (`confirm_answer`, types `yes` / `no`), stops listening, and the
+  answer of the assistant comes as an announcement with its text on the
+  screen. Older versions of the assistant ignore the touch.
 - **Volume**: a bar for two seconds whenever the volume changes.
 - **Ringing**: a ringing timer or alarm fills the screen with a red "Stop";
   a touch anywhere silences it, like the Play/Pause button.
@@ -270,8 +273,10 @@ Other pages fall back to the clock after a minute without a touch.
   date of a build of your own), Wi-Fi with signal, IP, uptime, free memory, the
   connection to the assistant. **Firmware-Update** (top right) looks for a new
   release: without one a message says that the latest firmware is installed;
-  with one it asks Yes/No and installs it over the air, with the progress on
-  the screen (ready-made firmware only).
+  with one it asks Yes/No and installs it over the air (ready-made firmware
+  only). While any new firmware is written - from the screen, from ioBroker or
+  from ESPHome - a red screen asks not to unplug the device and shows the
+  progress.
 - **Values** (swipe left): four tiles with numbers that something else writes
   into the entities **Value 1** ... **Value 4** (see below).
 - **Switches** (swipe left once more): four tiles for the entities
