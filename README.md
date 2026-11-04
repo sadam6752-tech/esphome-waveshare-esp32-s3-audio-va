@@ -266,8 +266,12 @@ Other pages fall back to the clock after a minute without a touch.
 - **Volume**: a bar for two seconds whenever the volume changes.
 - **Ringing**: a ringing timer or alarm fills the screen with a red "Stop";
   a touch anywhere silences it, like the Play/Pause button.
-- **System** (swipe right): Wi-Fi with signal, IP, uptime, free memory, the
-  connection to the assistant, the ESPHome version.
+- **System** (swipe right): the firmware version (the release, or the build
+  date of a build of your own), Wi-Fi with signal, IP, uptime, free memory, the
+  connection to the assistant. **Firmware-Update** (top right) looks for a new
+  release: without one a message says that the latest firmware is installed;
+  with one it asks Yes/No and installs it over the air, with the progress on
+  the screen (ready-made firmware only).
 - **Values** (swipe left): four tiles with numbers that something else writes
   into the entities **Value 1** ... **Value 4** (see below).
 - **Settings** (gear): volume, display brightness by day and at night, LED

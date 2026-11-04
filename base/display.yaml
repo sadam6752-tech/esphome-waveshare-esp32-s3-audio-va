@@ -332,6 +332,92 @@ lvgl:
                 text_font: font_small
                 text_color: 0xFFFFFF
                 text: ""
+      # A new firmware was found: install it? While it installs: the progress.
+      - obj:
+          id: fw_box
+          hidden: true
+          width: 100%
+          height: 100%
+          bg_color: 0x101828
+          bg_opa: COVER
+          border_width: 0
+          radius: 0
+          pad_all: 14
+          scrollable: false
+          widgets:
+            - label:
+                id: lbl_fw_question
+                align: TOP_MID
+                y: 20
+                width: 100%
+                long_mode: WRAP
+                text_align: CENTER
+                text_font: font_text
+                text_color: 0xFFFFFF
+                text: ""
+            - button:
+                id: btn_fw_yes
+                align: BOTTOM_LEFT
+                x: 10
+                width: 130
+                height: 48
+                bg_color: 0x15803D
+                on_click:
+                  - lambda: |-
+                      #ifdef USE_UPDATE
+                      if (!App.get_updates().empty()) {
+                        ESP_LOGI("fw_ui", "Installing the update");
+                        App.get_updates()[0]->perform();
+                      }
+                      #endif
+                widgets:
+                  - label:
+                      id: lbl_fw_yes
+                      align: CENTER
+                      text_font: font_text
+                      text_color: 0xFFFFFF
+                      text: "Ja"
+            - button:
+                id: btn_fw_no
+                align: BOTTOM_RIGHT
+                x: -10
+                width: 130
+                height: 48
+                bg_color: 0x334155
+                on_click:
+                  - lvgl.widget.hide: fw_box
+                widgets:
+                  - label:
+                      id: lbl_fw_no
+                      align: CENTER
+                      text_font: font_text
+                      text_color: 0xFFFFFF
+                      text: "Nein"
+      # A short message in the middle (e.g. "the latest firmware is installed"); it goes after 5 s.
+      - obj:
+          id: toast_box
+          hidden: true
+          align: CENTER
+          width: 280
+          height: SIZE_CONTENT
+          bg_color: 0x1E293B
+          bg_opa: COVER
+          border_width: 0
+          radius: 12
+          pad_all: 16
+          scrollable: false
+          on_click:
+            - lvgl.widget.hide: toast_box
+          widgets:
+            - label:
+                id: lbl_toast
+                align: CENTER
+                width: 100%
+                long_mode: WRAP
+                text_align: CENTER
+                text_font: font_text
+                text_color: 0xFFFFFF
+                text: ""
       # A ringing timer or alarm: a touch anywhere stops it.
       - obj:
           id: ring_box
@@ -454,12 +540,28 @@ lvgl:
             id: lbl_system
             align: TOP_LEFT
             x: 14
-            y: 50
+            y: 46
             width: 292
             long_mode: WRAP
             text_font: font_small
             text_color: 0xCBD5E1
             text: ""
+        - button:
+            id: btn_fw
+            align: TOP_RIGHT
+            x: -46
+            y: 6
+            height: 36
+            bg_color: 0x1E293B
+            on_click:
+              - script.execute: fw_check
+            widgets:
+              - label:
+                  id: lbl_fw_button
+                  align: CENTER
+                  text_font: font_small
+                  text_color: 0xFFFFFF
+                  text: "Firmware-Update"
 
     - id: page_values
       bg_color: 0x000000
@@ -856,6 +958,10 @@ globals:
     type: uint32_t
     restore_value: false
     initial_value: '0xFFFFFFFF'
+  - id: fw_check_started
+    type: uint32_t
+    restore_value: false
+    initial_value: '0'
   - id: wifi_page_opened
     type: bool
     restore_value: false
@@ -911,6 +1017,10 @@ interval:
             lv_label_set_text(id(lbl_set_wifi), t_wifi[lang]);
             lv_label_set_text(id(lbl_wifi_title), t_wifi[lang]);
             lv_label_set_text(id(lbl_wifi_scan), t_scan[lang]);
+            static const char *const t_yes_b[] = {"Ja", "Yes", "Да"};
+            static const char *const t_no_b[] = {"Nein", "No", "Нет"};
+            lv_label_set_text(id(lbl_fw_yes), t_yes_b[lang]);
+            lv_label_set_text(id(lbl_fw_no), t_no_b[lang]);
           }
 
           // the running timers: one with its name, several as T1, T2, ...
@@ -1022,6 +1132,57 @@ interval:
   - interval: 1s
     then:
       - lambda: id(uptime_s) += 1;
+      # the firmware update: the answer to a check, the question, the progress
+      - lambda: |-
+          #ifdef USE_UPDATE
+          if (App.get_updates().empty()) return;
+          auto *u = App.get_updates()[0];
+          size_t lang = id(display_language).active_index().value_or(0) % 3;
+          const auto &info = u->update_info;
+          if (u->state == update::UPDATE_STATE_INSTALLING) {
+            static const char *const t_inst[] = {"Firmware wird installiert", "Installing the firmware", "Установка прошивки"};
+            static const char *const t_wait[] = {"Nicht ausschalten.", "Do not switch off.", "Не выключайте."};
+            char buf[160];
+            if (info.has_progress) snprintf(buf, sizeof(buf), "%s %s\n\n%.0f %%\n\n%s", t_inst[lang], info.latest_version.c_str(), info.progress, t_wait[lang]);
+            else snprintf(buf, sizeof(buf), "%s %s ...\n\n%s", t_inst[lang], info.latest_version.c_str(), t_wait[lang]);
+            lv_label_set_text(id(lbl_fw_question), buf);
+            lv_obj_add_flag(id(btn_fw_yes), LV_OBJ_FLAG_HIDDEN);
+            lv_obj_add_flag(id(btn_fw_no), LV_OBJ_FLAG_HIDDEN);
+            lv_obj_clear_flag(id(fw_box), LV_OBJ_FLAG_HIDDEN);
+            id(lcd_last_touch) = millis();  // keep the light on
+            return;
+          }
+          if (id(fw_check_started) == 0) return;
+          uint32_t waited = millis() - id(fw_check_started);
+          bool done = true;
+          if (u->state == update::UPDATE_STATE_AVAILABLE) {
+            static const char *const t_new[] = {"Neue Firmware %s verfügbar (installiert: %s).\n\nAktualisieren?",
+                                                "New firmware %s available (installed: %s).\n\nUpdate?",
+                                                "Доступна новая прошивка %s (установлена: %s).\n\nОбновить?"};
+            char buf[200];
+            snprintf(buf, sizeof(buf), t_new[lang], info.latest_version.c_str(), info.current_version.c_str());
+            lv_label_set_text(id(lbl_fw_question), buf);
+            lv_obj_clear_flag(id(btn_fw_yes), LV_OBJ_FLAG_HIDDEN);
+            lv_obj_clear_flag(id(btn_fw_no), LV_OBJ_FLAG_HIDDEN);
+            lv_obj_clear_flag(id(fw_box), LV_OBJ_FLAG_HIDDEN);
+          } else if (u->state == update::UPDATE_STATE_NO_UPDATE && waited > 4000) {
+            static const char *const t_current[] = {"Die neueste Firmware ist bereits installiert.",
+                                                    "The latest firmware is already installed.",
+                                                    "У вас уже установлена актуальная прошивка."};
+            id(show_toast).execute(t_current[lang]);
+          } else if (waited > 30000) {
+            static const char *const t_fail[] = {"Der Update-Server antwortet nicht.",
+                                                 "The update server does not answer.",
+                                                 "Сервер обновлений не отвечает."};
+            id(show_toast).execute(t_fail[lang]);
+          } else {
+            done = false;
+          }
+          if (done) {
+            id(fw_check_started) = 0;
+            lv_label_set_text(id(lbl_fw_button), "Firmware-Update");
+          }
+          #endif
       # no Wi-Fi a while after the start (a new device, or the network is gone): open the Wi-Fi page once
       - if:
           condition:
@@ -1217,14 +1378,21 @@ interval:
                 snprintf(up, sizeof(up), "%ud %02u:%02u", unsigned(s / 86400), unsigned(s / 3600 % 24), unsigned(s / 60 % 60));
                 char ssid[wifi::SSID_BUFFER_SIZE] = "-";
                 if (wifi->is_connected()) wifi->wifi_ssid_to(ssid);
+                // the version of a ready-made firmware (esphome.project), else a build of its own
+                #ifdef ESPHOME_PROJECT_VERSION
+                const char *firmware = ESPHOME_PROJECT_VERSION;
+                #else
+                const char *firmware = __DATE__;
+                #endif
                 char buf[400];
                 snprintf(buf, sizeof(buf),
-                         "Wi-Fi: %s (%d dBm)\nIP: %s\n%s: %s\n%s: %u KB RAM, %u KB PSRAM\n%s: %s\nESPHome %s",
+                         "Firmware %s (ESPHome %s)\nWi-Fi: %s (%d dBm)\nIP: %s\n%s: %s\n%s: %u KB RAM, %u KB PSRAM\n%s: %s",
+                         firmware, ESPHOME_VERSION,
                          ssid, int(wifi->wifi_rssi()), ip.c_str(),
                          t_up[lang], up, t_mem[lang],
                          unsigned(heap_caps_get_free_size(MALLOC_CAP_INTERNAL) / 1024),
                          unsigned(heap_caps_get_free_size(MALLOC_CAP_SPIRAM) / 1024), t_assist[lang],
-                         api::global_api_server->is_connected() ? t_yes[lang] : t_no[lang], ESPHOME_VERSION);
+                         api::global_api_server->is_connected() ? t_yes[lang] : t_no[lang]);
                 lv_label_set_text(id(lbl_system), buf);
                 static const char *const t_title[] = {"System", "System", "Система"};
                 lv_label_set_text(id(lbl_system_title), t_title[lang]);
@@ -1274,6 +1442,37 @@ voice_assistant:
     - script.execute: dialog_hide
 
 script:
+  # Look for a new firmware (the update entity of the ready-made firmware, base/release.yaml).
+  - id: fw_check
+    then:
+      - lambda: |-
+          size_t lang = id(display_language).active_index().value_or(0) % 3;
+          #ifdef USE_UPDATE
+          if (!App.get_updates().empty()) {
+            if (id(fw_check_started) != 0) return;  // already looking
+            static const char *const t_look[] = {"Suche ...", "Looking ...", "Поиск ..."};
+            lv_label_set_text(id(lbl_fw_button), t_look[lang]);
+            id(fw_check_started) = millis();
+            App.get_updates()[0]->check();
+            return;
+          }
+          #endif
+          static const char *const t_none[] = {"Updates gibt es nur für die fertige Firmware.",
+                                               "Updates are for the ready-made firmware only.",
+                                               "Обновления есть только для готовой прошивки."};
+          id(show_toast).execute(t_none[lang]);
+  # A message in the middle for 5 s.
+  - id: show_toast
+    mode: restart
+    parameters:
+      text: std::string
+    then:
+      - lambda: |-
+          lv_label_set_text(id(lbl_toast), text.c_str());
+          lv_obj_clear_flag(id(toast_box), LV_OBJ_FLAG_HIDDEN);
+          lv_obj_move_foreground(id(toast_box));
+      - delay: 5s
+      - lvgl.widget.hide: toast_box
   # Scan all networks. ESPHome's own scans see only the configured network (and are skipped while the
   # signal is good), so the scan is started directly; ESPHome takes the results and keeps all of them.
   # Between the channels the radio returns to the home channel, so the connection stays.

@@ -2,6 +2,19 @@
 
 ## [Unreleased]
 
+## [1.3.1] - 2026-11-04
+
+### Added
+- **Firmware version on the system page**: the release, or the build date of
+  a build of your own.
+- **Firmware-Update button** (system page, top right): looks for a new
+  release; without one a message says that the latest firmware is installed,
+  with one it asks Yes/No and installs it over the air with the progress on
+  the screen.
+
+### Changed
+- The release workflows use the actions on Node 24.
+
 ## [1.3.0] - 2026-11-04
 
 First release of this fork: ready-made firmware from the install page
