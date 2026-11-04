@@ -1,0 +1,68 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Waveshare Voice Firmware</title>
+  <script type="module" src="https://unpkg.com/esp-web-tools@10.1.0/dist/web/install-button.js?module"></script>
+  <style>
+    :root { --bg: #f8fafc; --fg: #0f172a; --muted: #475569; --card: #ffffff; --line: #e2e8f0; --accent: #0369a1; }
+    @media (prefers-color-scheme: dark) {
+      :root { --bg: #0b1120; --fg: #e2e8f0; --muted: #94a3b8; --card: #111827; --line: #1e293b; --accent: #38bdf8; }
+    }
+    body { margin: 0; background: var(--bg); color: var(--fg); font: 16px/1.5 system-ui, sans-serif; }
+    main { max-width: 760px; margin: 0 auto; padding: 32px 16px 48px; }
+    h1 { font-size: 1.6rem; margin: 0 0 4px; }
+    p { color: var(--muted); }
+    .cards { display: grid; gap: 16px; grid-template-columns: repeat(auto-fit, minmax(260px, 1fr)); margin: 24px 0; }
+    .card { background: var(--card); border: 1px solid var(--line); border-radius: 12px; padding: 18px; }
+    .card h2 { font-size: 1.1rem; margin: 0 0 6px; }
+    ol { padding-left: 20px; color: var(--muted); }
+    a { color: var(--accent); }
+    esp-web-install-button button[slot="activate"] {
+      background: var(--accent); color: #fff; border: 0; border-radius: 8px; padding: 10px 16px; font-size: 1rem;
+      cursor: pointer; margin-top: 8px;
+    }
+  </style>
+</head>
+<body>
+<main>
+  <h1>Waveshare Voice</h1>
+  <p>Voice satellite firmware for the Waveshare ESP32-S3-AUDIO-Board, driven by ioBroker.assistant.
+    Flash it from this page with Chrome or Edge on a computer; no ESPHome build needed.</p>
+
+  <div class="cards">
+    <div class="card">
+      <h2>With display</h2>
+      <p>With the Waveshare 2.8inch Capacitive Touch LCD on the LCD connector.</p>
+      <esp-web-install-button manifest="firmware/display/manifest.json">
+        <button slot="activate">Install</button>
+        <span slot="unsupported">Use Chrome or Edge on a computer.</span>
+        <span slot="not-allowed">Open this page over https.</span>
+      </esp-web-install-button>
+    </div>
+    <div class="card">
+      <h2>Without display</h2>
+      <p>The board alone: speaker, microphones, LED ring, buttons.</p>
+      <esp-web-install-button manifest="firmware/core/manifest.json">
+        <button slot="activate">Install</button>
+        <span slot="unsupported">Use Chrome or Edge on a computer.</span>
+        <span slot="not-allowed">Open this page over https.</span>
+      </esp-web-install-button>
+    </div>
+  </div>
+
+  <h2>Steps</h2>
+  <ol>
+    <li>Connect the board with a USB-C cable and press <b>Install</b>. If no port shows up, hold BOOT while
+      plugging the cable in.</li>
+    <li>After flashing, the page offers to set up Wi-Fi. With the display, Wi-Fi can also be set on the
+      device: Settings (gear) &gt; Wi-Fi. Without a network the board opens the access point
+      <b>Waveshare-VA Setup</b>; join it with a phone and pick your network.</li>
+    <li>In ioBroker.assistant, add the satellite (Satellites tab). Later updates show up there as the
+      <b>Firmware</b> update.</li>
+  </ol>
+  <p><a href="https://github.com/sadam6752-tech/esphome-waveshare-esp32-s3-audio-va">Source and documentation</a></p>
+</main>
+</body>
+</html>

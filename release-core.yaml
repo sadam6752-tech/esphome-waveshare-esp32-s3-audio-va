@@ -1,0 +1,16 @@
+# Ready-made firmware WITHOUT a display (built by .github/workflows/release.yml).
+# To build it yourself: esphome compile release-core.yaml (needs a secrets.yaml, e.g. a copy of
+# secrets.example.yaml: the Wi-Fi in it is removed below).
+
+substitutions:
+  name: waveshare-va
+  friendly_name: "Waveshare Voice"
+  release_variant: core
+
+packages:
+  core: !include base/core.yaml
+  release: !include base/release.yaml
+
+wifi:
+  ssid: !remove
+  password: !remove

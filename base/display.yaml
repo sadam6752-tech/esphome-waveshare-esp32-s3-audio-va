@@ -1,10 +1,18 @@
 ###############################################################################
 # Waveshare 2.8inch Capacitive Touch LCD (240x320, ST7789, touch CST3530 = Rev 1.1 / V2)
-# on the 18-pin LCD FPC of the ESP32-S3-AUDIO-Board.
+# on the 18-pin LCD FPC of the ESP32-S3-AUDIO-Board. Optional: the core does not need it.
 #
-# Idle screen: clock, date and the running timer. A ringing timer or alarm is stopped by a touch anywhere.
-# Night mode of the core dims the backlight; a touch lights it for a few seconds. When the assistant asks something back (it listens again right after its
-# answer, e.g. to confirm an action), its question is shown with a hint to answer by voice. Optional: the core does not need it.
+# Pages (landscape 320x240):
+#   system  <-swipe-  clock  -swipe->  values          settings: the gear on the clock page
+# - clock: time, date, alarm, the running timers, the state of the assistant (icon, top right).
+# - system: Wi-Fi, IP, uptime, memory, connection to the assistant.
+# - values: four numbers that ioBroker writes (entities "Value 1".."Value 4"), labels from substitutions.
+# - settings: volume, display and ring brightness, microphone, night mode, wake sound, language.
+# Over every page: the conversation (what was heard, the answer, a question waits for a spoken answer),
+# the volume while it changes, and a full-screen "Stop" while a timer or the alarm rings (touch = stop).
+# Night mode dims the backlight; a touch lights it for a few seconds. Other pages fall back to the clock
+# after a minute without a touch.
+#
 # Include it from your thin config:
 #   packages:
 #     core: !include base/core.yaml
@@ -19,6 +27,24 @@ substitutions:
   # Language of the display at the first start (Deutsch, English, Русский); later the select
   # "Display language" (the satellite does not learn the language of the assistant).
   display_language: Deutsch
+  # The values page: what each value is. ioBroker writes the numbers into the entities "Value 1".."Value 4"
+  # (assistant.0.satellites.<satellite>.controls.value_1 ...).
+  value_1_label: "Wert 1"
+  value_1_unit: ""
+  value_1_decimals: "1"
+  value_2_label: "Wert 2"
+  value_2_unit: ""
+  value_2_decimals: "1"
+  value_3_label: "Wert 3"
+  value_3_unit: ""
+  value_3_decimals: "1"
+  value_4_label: "Wert 4"
+  value_4_unit: ""
+  value_4_decimals: "1"
+
+esphome:
+  includes:
+    - <esp_wifi.h>
 
 external_components:
   - source:
@@ -123,39 +149,116 @@ number:
     max_value: 100
     step: 5
     unit_of_measurement: "%"
+  # The values page. -999999 = no value yet (shown as "–").
+  - platform: template
+    id: value_1
+    name: "Value 1"
+    icon: "mdi:numeric-1-box-outline"
+    optimistic: true
+    restore_value: true
+    initial_value: -999999
+    min_value: -999999
+    max_value: 999999
+    step: 0.01
+    mode: box
+  - platform: template
+    id: value_2
+    name: "Value 2"
+    icon: "mdi:numeric-2-box-outline"
+    optimistic: true
+    restore_value: true
+    initial_value: -999999
+    min_value: -999999
+    max_value: 999999
+    step: 0.01
+    mode: box
+  - platform: template
+    id: value_3
+    name: "Value 3"
+    icon: "mdi:numeric-3-box-outline"
+    optimistic: true
+    restore_value: true
+    initial_value: -999999
+    min_value: -999999
+    max_value: 999999
+    step: 0.01
+    mode: box
+  - platform: template
+    id: value_4
+    name: "Value 4"
+    icon: "mdi:numeric-4-box-outline"
+    optimistic: true
+    restore_value: true
+    initial_value: -999999
+    min_value: -999999
+    max_value: 999999
+    step: 0.01
+    mode: box
 
 font:
   - file: "gfonts://Roboto@500"
     id: font_clock
     size: 96
     glyphs: "0123456789:"
+  - file: "gfonts://Roboto@500"
+    id: font_value
+    size: 34
+    glyphsets: [GF_Latin_Core]
   - file: "gfonts://Roboto"
     id: font_date
-    size: 26
+    size: 24
     glyphsets: [GF_Latin_Core, GF_Cyrillic_Core]
   - file: "gfonts://Roboto"
     id: font_text
     size: 22
     glyphsets: [GF_Latin_Core, GF_Cyrillic_Core]
+  - file: "gfonts://Roboto"
+    id: font_small
+    size: 18
+    glyphsets: [GF_Latin_Core, GF_Cyrillic_Core]
+  # Icons (Material Design Icons): microphone, microphone-off, dots, volume-high, wifi-off, lan-disconnect,
+  # alert-circle, cog, chevron-left, alarm, wifi.
+  - file: "https://cdn.jsdelivr.net/npm/@mdi/font@7.4.47/fonts/materialdesignicons-webfont.ttf"
+    id: font_icons
+    size: 30
+    glyphs: ["\U000F036C", "\U000F036D", "\U000F01D8", "\U000F057E", "\U000F05AA", "\U000F0319", "\U000F0028",
+             "\U000F0493", "\U000F0141", "\U000F0020", "\U000F05A9"]
   - file: "gfonts://Roboto@500"
     id: font_stop
     size: 64
     glyphs: "StopСтп"
 
 lvgl:
+  id: lvgl_comp
   displays: [lcd]
   touchscreens: [touch]
   rotation: 90
   buffer_size: 25%
-  style_definitions:
-    - id: screen_style
-      bg_color: 0x000000
-      text_color: 0xFFFFFF
+  theme:
+    slider:
+      bg_color: 0x334155
+      indicator:
+        bg_color: 0x38BDF8
+      knob:
+        bg_color: 0xFFFFFF
+    switch:
+      bg_color: 0x334155
+      indicator:
+        checked:
+          bg_color: 0x38BDF8
   top_layer:
     widgets:
-      # The question of the assistant, over the clock while it waits for the answer.
+      # The state of the assistant, over every page.
+      - label:
+          id: lbl_status
+          align: TOP_RIGHT
+          x: -8
+          y: 6
+          text_font: font_icons
+          text: ""
+      # The conversation: what was heard and the answer; a question waits for a spoken answer.
       - obj:
-          id: confirm_box
+          id: dialog_box
           hidden: true
           width: 100%
           height: 100%
@@ -163,11 +266,21 @@ lvgl:
           bg_opa: COVER
           border_width: 0
           radius: 0
-          pad_all: 14
+          pad_all: 12
+          scrollable: false
           widgets:
             - label:
-                id: lbl_question
+                id: lbl_heard
+                align: TOP_LEFT
+                width: 260
+                long_mode: DOT
+                text_font: font_small
+                text_color: 0x94A3B8
+                text: ""
+            - label:
+                id: lbl_answer
                 align: TOP_MID
+                y: 34
                 width: 100%
                 long_mode: WRAP
                 text_align: CENTER
@@ -177,8 +290,47 @@ lvgl:
             - label:
                 id: lbl_hint
                 align: BOTTOM_MID
+                hidden: true
                 text_font: font_text
                 text_color: 0x7DD3FC
+                text: ""
+      # The volume while it changes.
+      - obj:
+          id: volume_box
+          hidden: true
+          align: BOTTOM_MID
+          y: -12
+          width: 260
+          height: 54
+          bg_color: 0x1E293B
+          bg_opa: COVER
+          border_width: 0
+          radius: 12
+          pad_all: 8
+          scrollable: false
+          widgets:
+            - label:
+                align: LEFT_MID
+                text_font: font_icons
+                text_color: 0xFFFFFF
+                text: "\U000F057E"
+            - bar:
+                id: volume_bar
+                align: LEFT_MID
+                x: 40
+                width: 150
+                height: 12
+                min_value: 0
+                max_value: 100
+                value: 0
+                bg_color: 0x334155
+                indicator:
+                  bg_color: 0x38BDF8
+            - label:
+                id: lbl_volume
+                align: RIGHT_MID
+                text_font: font_small
+                text_color: 0xFFFFFF
                 text: ""
       # A ringing timer or alarm: a touch anywhere stops it.
       - obj:
@@ -190,6 +342,7 @@ lvgl:
           bg_opa: COVER
           border_width: 0
           radius: 0
+          scrollable: false
           on_press:
             - switch.turn_off: timer_ringing
           widgets:
@@ -210,7 +363,47 @@ lvgl:
   pages:
     - id: page_clock
       bg_color: 0x000000
+      scrollable: false
+      on_swipe_right:
+        - lvgl.page.show:
+            id: page_system
+            animation: MOVE_RIGHT
+            time: 200ms
+      on_swipe_left:
+        - lvgl.page.show:
+            id: page_values
+            animation: MOVE_LEFT
+            time: 200ms
       widgets:
+        - button:
+            id: btn_settings
+            align: TOP_LEFT
+            x: 2
+            y: 2
+            width: 48
+            height: 44
+            bg_opa: TRANSP
+            shadow_width: 0
+            border_width: 0
+            on_click:
+              - lvgl.page.show:
+                  id: page_settings
+                  animation: FADE_IN
+                  time: 150ms
+            widgets:
+              - label:
+                  align: CENTER
+                  text_font: font_icons
+                  text_color: 0x64748B
+                  text: "\U000F0493"
+        - label:
+            id: lbl_alarm
+            hidden: true
+            align: TOP_MID
+            y: 12
+            text_font: font_small
+            text_color: 0xA78BFA
+            text: ""
         - label:
             id: lbl_time
             align: CENTER
@@ -222,6 +415,9 @@ lvgl:
             id: lbl_date
             align: CENTER
             y: 60
+            width: 100%
+            long_mode: DOT
+            text_align: CENTER
             text_font: font_date
             text_color: 0xA0A0A0
             text: ""
@@ -230,33 +426,521 @@ lvgl:
             hidden: true
             align: BOTTOM_MID
             y: -10
+            width: 100%
+            long_mode: DOT
+            text_align: CENTER
             text_font: font_date
             text_color: 0xFBBF24
             text: ""
 
+    - id: page_system
+      bg_color: 0x000000
+      scrollable: false
+      on_swipe_left:
+        - lvgl.page.show:
+            id: page_clock
+            animation: MOVE_LEFT
+            time: 200ms
+      widgets:
+        - label:
+            id: lbl_system_title
+            align: TOP_LEFT
+            x: 14
+            y: 12
+            text_font: font_text
+            text_color: 0xFFFFFF
+            text: "System"
+        - label:
+            id: lbl_system
+            align: TOP_LEFT
+            x: 14
+            y: 50
+            width: 292
+            long_mode: WRAP
+            text_font: font_small
+            text_color: 0xCBD5E1
+            text: ""
+
+    - id: page_values
+      bg_color: 0x000000
+      scrollable: false
+      on_swipe_right:
+        - lvgl.page.show:
+            id: page_clock
+            animation: MOVE_RIGHT
+            time: 200ms
+      widgets:
+        - obj:
+            align: TOP_LEFT
+            x: 6
+            y: 8
+            width: 150
+            height: 108
+            bg_color: 0x111827
+            border_width: 0
+            radius: 10
+            scrollable: false
+            widgets:
+              - label:
+                  align: TOP_LEFT
+                  long_mode: DOT
+                  width: 128
+                  text_font: font_small
+                  text_color: 0x94A3B8
+                  text: "${value_1_label}"
+              - label:
+                  id: lbl_value_1
+                  align: BOTTOM_LEFT
+                  text_font: font_value
+                  text_color: 0xFFFFFF
+                  text: "–"
+        - obj:
+            align: TOP_RIGHT
+            x: -6
+            y: 8
+            width: 150
+            height: 108
+            bg_color: 0x111827
+            border_width: 0
+            radius: 10
+            scrollable: false
+            widgets:
+              - label:
+                  align: TOP_LEFT
+                  long_mode: DOT
+                  width: 128
+                  text_font: font_small
+                  text_color: 0x94A3B8
+                  text: "${value_2_label}"
+              - label:
+                  id: lbl_value_2
+                  align: BOTTOM_LEFT
+                  text_font: font_value
+                  text_color: 0xFFFFFF
+                  text: "–"
+        - obj:
+            align: BOTTOM_LEFT
+            x: 6
+            y: -8
+            width: 150
+            height: 108
+            bg_color: 0x111827
+            border_width: 0
+            radius: 10
+            scrollable: false
+            widgets:
+              - label:
+                  align: TOP_LEFT
+                  long_mode: DOT
+                  width: 128
+                  text_font: font_small
+                  text_color: 0x94A3B8
+                  text: "${value_3_label}"
+              - label:
+                  id: lbl_value_3
+                  align: BOTTOM_LEFT
+                  text_font: font_value
+                  text_color: 0xFFFFFF
+                  text: "–"
+        - obj:
+            align: BOTTOM_RIGHT
+            x: -6
+            y: -8
+            width: 150
+            height: 108
+            bg_color: 0x111827
+            border_width: 0
+            radius: 10
+            scrollable: false
+            widgets:
+              - label:
+                  align: TOP_LEFT
+                  long_mode: DOT
+                  width: 128
+                  text_font: font_small
+                  text_color: 0x94A3B8
+                  text: "${value_4_label}"
+              - label:
+                  id: lbl_value_4
+                  align: BOTTOM_LEFT
+                  text_font: font_value
+                  text_color: 0xFFFFFF
+                  text: "–"
+
+    - id: page_settings
+      bg_color: 0x000000
+      on_load:
+        # show the current values
+        - lambda: |-
+            lv_slider_set_value(id(sl_volume), int(id(external_media_player).volume * 100), LV_ANIM_OFF);
+            lv_slider_set_value(id(sl_display), int(id(lcd_day_brightness).state), LV_ANIM_OFF);
+            lv_slider_set_value(id(sl_night), int(id(lcd_night_brightness).state), LV_ANIM_OFF);
+            lv_slider_set_value(id(sl_ring), int(id(led_ring_brightness).state * 100 + 0.5f), LV_ANIM_OFF);
+            auto set_switch = [](lv_obj_t *sw, bool on) {
+              if (on) lv_obj_add_state(sw, LV_STATE_CHECKED); else lv_obj_clear_state(sw, LV_STATE_CHECKED);
+            };
+            set_switch(id(sw_mic), id(mic_mute_switch).state);
+            set_switch(id(sw_night), id(night_mode).state);
+            set_switch(id(sw_wake), id(wake_sound).state);
+            lv_dropdown_set_selected(id(dd_language)->obj, id(display_language).active_index().value_or(0));
+      widgets:
+        - button:
+            align: TOP_LEFT
+            x: 2
+            y: 2
+            width: 48
+            height: 44
+            bg_opa: TRANSP
+            shadow_width: 0
+            border_width: 0
+            on_click:
+              - lvgl.page.show:
+                  id: page_clock
+                  animation: FADE_IN
+                  time: 150ms
+            widgets:
+              - label:
+                  align: CENTER
+                  text_font: font_icons
+                  text_color: 0xFFFFFF
+                  text: "\U000F0141"
+        - label:
+            id: lbl_settings_title
+            align: TOP_LEFT
+            x: 54
+            y: 12
+            text_font: font_text
+            text_color: 0xFFFFFF
+            text: ""
+        # rows: label on the left, control on the right; the page scrolls
+        - label: {id: lbl_set_volume, x: 14, y: 62, text_font: font_small, text_color: 0xCBD5E1, text: ""}
+        - slider:
+            id: sl_volume
+            x: 150
+            y: 66
+            width: 150
+            min_value: 0
+            max_value: 100
+            on_release:
+              - media_player.volume_set:
+                  id: external_media_player
+                  volume: !lambda return x / 100.0f;
+        - label: {id: lbl_set_display, x: 14, y: 112, text_font: font_small, text_color: 0xCBD5E1, text: ""}
+        - slider:
+            id: sl_display
+            x: 150
+            y: 116
+            width: 150
+            min_value: 5
+            max_value: 100
+            on_release:
+              - number.set:
+                  id: lcd_day_brightness
+                  value: !lambda return x;
+        - label: {id: lbl_set_night, x: 14, y: 162, text_font: font_small, text_color: 0xCBD5E1, text: ""}
+        - slider:
+            id: sl_night
+            x: 150
+            y: 166
+            width: 150
+            min_value: 0
+            max_value: 100
+            on_release:
+              - number.set:
+                  id: lcd_night_brightness
+                  value: !lambda return x;
+        - label: {id: lbl_set_ring, x: 14, y: 212, text_font: font_small, text_color: 0xCBD5E1, text: ""}
+        - slider:
+            id: sl_ring
+            x: 150
+            y: 216
+            width: 150
+            min_value: 40
+            max_value: 100
+            on_release:
+              - number.set:
+                  id: led_ring_brightness
+                  value: !lambda return x / 100.0f;
+        - label: {id: lbl_set_mic, x: 14, y: 262, text_font: font_small, text_color: 0xCBD5E1, text: ""}
+        - switch:
+            id: sw_mic
+            x: 240
+            y: 258
+            on_value:
+              - lambda: if (x) id(mic_mute_switch).turn_on(); else id(mic_mute_switch).turn_off();
+        - label: {id: lbl_set_nightmode, x: 14, y: 312, text_font: font_small, text_color: 0xCBD5E1, text: ""}
+        - switch:
+            id: sw_night
+            x: 240
+            y: 308
+            on_value:
+              - lambda: if (x) id(night_mode).turn_on(); else id(night_mode).turn_off();
+        - label: {id: lbl_set_wake, x: 14, y: 362, text_font: font_small, text_color: 0xCBD5E1, text: ""}
+        - switch:
+            id: sw_wake
+            x: 240
+            y: 358
+            on_value:
+              - lambda: if (x) id(wake_sound).turn_on(); else id(wake_sound).turn_off();
+        - label: {id: lbl_set_language, x: 14, y: 412, text_font: font_small, text_color: 0xCBD5E1, text: ""}
+        - dropdown:
+            id: dd_language
+            x: 150
+            y: 404
+            width: 150
+            text_font: font_small
+            options: [Deutsch, English, Русский]
+            dropdown_list:
+              text_font: font_small
+            on_value:
+              - lambda: |-
+                  auto call = id(display_language).make_call();
+                  call.set_index(x);
+                  call.perform();
+        - label: {id: lbl_set_wifi, x: 14, y: 462, text_font: font_small, text_color: 0xCBD5E1, text: ""}
+        - button:
+            x: 150
+            y: 452
+            width: 150
+            height: 40
+            bg_color: 0x1E293B
+            on_click:
+              - lvgl.page.show: page_wifi
+            widgets:
+              - label:
+                  id: lbl_set_wifi_ssid
+                  align: CENTER
+                  width: 136
+                  long_mode: DOT
+                  text_align: CENTER
+                  text_font: font_small
+                  text_color: 0xFFFFFF
+                  text: ""
+        - obj: {x: 0, y: 500, width: 10, height: 10, bg_opa: TRANSP, border_width: 0}
+
+    # Wi-Fi: the networks around, a touch picks one; with a password the keyboard page follows.
+    - id: page_wifi
+      bg_color: 0x000000
+      scrollable: false
+      on_load:
+        - script.execute: wifi_scan
+      widgets:
+        - button:
+            align: TOP_LEFT
+            x: 2
+            y: 2
+            width: 48
+            height: 44
+            bg_opa: TRANSP
+            shadow_width: 0
+            border_width: 0
+            on_click:
+              - lvgl.page.show: page_settings
+            widgets:
+              - label:
+                  align: CENTER
+                  text_font: font_icons
+                  text_color: 0xFFFFFF
+                  text: "\U000F0141"
+        - label:
+            id: lbl_wifi_title
+            align: TOP_LEFT
+            x: 54
+            y: 12
+            text_font: font_text
+            text_color: 0xFFFFFF
+            text: "WLAN"
+        - button:
+            id: btn_wifi_scan
+            align: TOP_RIGHT
+            x: -46
+            y: 6
+            height: 36
+            bg_color: 0x1E293B
+            on_click:
+              - script.execute: wifi_scan
+            widgets:
+              - label:
+                  id: lbl_wifi_scan
+                  align: CENTER
+                  text_font: font_small
+                  text_color: 0xFFFFFF
+                  text: ""
+        - label:
+            id: lbl_wifi_state
+            align: TOP_LEFT
+            x: 14
+            y: 48
+            width: 292
+            long_mode: DOT
+            text_font: font_small
+            text_color: 0x94A3B8
+            text: ""
+        - obj:
+            id: wifi_list
+            align: TOP_LEFT
+            x: 8
+            y: 76
+            width: 304
+            height: 158
+            bg_opa: TRANSP
+            border_width: 0
+            pad_all: 0
+            layout:
+              type: flex
+              flex_flow: column
+              pad_row: 4
+            widgets: []
+
+    # The password for the picked network.
+    - id: page_wifi_pass
+      bg_color: 0x000000
+      scrollable: false
+      widgets:
+        - label:
+            id: lbl_pass_ssid
+            align: TOP_LEFT
+            x: 10
+            y: 6
+            width: 300
+            long_mode: DOT
+            text_font: font_small
+            text_color: 0xFFFFFF
+            text: ""
+        - textarea:
+            id: ta_pass
+            align: TOP_LEFT
+            x: 6
+            y: 32
+            width: 308
+            height: 44
+            one_line: true
+            password_mode: false
+            max_length: 63
+            text_font: font_small
+            text: ""
+        - keyboard:
+            id: kb_pass
+            textarea: ta_pass
+            mode: TEXT_LOWER
+            align: BOTTOM_MID
+            width: 100%
+            height: 158
+            text_font: montserrat_16
+            on_ready:
+              - lambda: |-
+                  std::string password = lv_textarea_get_text(id(ta_pass));
+                  ESP_LOGI("wifi_ui", "Connecting to \"%s\"", id(wifi_selected).c_str());
+                  wifi::global_wifi_component->save_wifi_sta(id(wifi_selected), password);
+                  id(wifi_connect_started) = millis();
+              - lvgl.page.show: page_wifi
+            on_cancel:
+              - lvgl.page.show: page_wifi
+
+globals:
+  # Wi-Fi page: the networks shown, the picked one, when a connection was started
+  - id: wifi_ssids
+    type: std::vector<std::string>
+    restore_value: false
+  - id: wifi_auth
+    type: std::vector<bool>
+    restore_value: false
+  - id: wifi_selected
+    type: std::string
+    restore_value: false
+  - id: wifi_connect_started
+    type: uint32_t
+    restore_value: false
+    initial_value: '0'
+  - id: wifi_list_shown
+    type: uint32_t
+    restore_value: false
+    initial_value: '0xFFFFFFFF'
+  - id: wifi_page_opened
+    type: bool
+    restore_value: false
+    initial_value: 'false'
+  - id: lcd_last_touch
+    type: uint32_t
+    restore_value: false
+    initial_value: '0'
+  - id: uptime_s
+    type: uint32_t
+    restore_value: false
+    initial_value: '0'
+  # the conversation on the screen
+  - id: dlg_answer
+    type: std::string
+    restore_value: false
+  - id: dlg_question
+    type: bool
+    restore_value: false
+    initial_value: 'false'
+
 interval:
-  # Timer, ringing and backlight follow the core.
+  # Overlays, timers, the status icon and the backlight follow the core.
   - interval: 250ms
     then:
       - lambda: |-
-          // the running timer that ends first
-          const voice_assistant::Timer *next = nullptr;
-          for (const auto &t : id(va).get_timers()) {
-            if (t.is_active && (next == nullptr || t.seconds_left < next->seconds_left)) next = &t;
+          size_t lang = id(display_language).active_index().value_or(0) % 3;
+
+          // texts that depend on the language
+          static int shown_lang = -1;
+          if (int(lang) != shown_lang) {
+            shown_lang = lang;
+            static const char *const t_settings[] = {"Einstellungen", "Settings", "Настройки"};
+            static const char *const t_volume[] = {"Lautstärke", "Volume", "Громкость"};
+            static const char *const t_display[] = {"Display", "Display", "Экран"};
+            static const char *const t_night[] = {"Display nachts", "Display at night", "Экран ночью"};
+            static const char *const t_ring[] = {"LED-Ring", "LED ring", "LED-кольцо"};
+            static const char *const t_mic[] = {"Mikrofon aus", "Microphone off", "Микрофон выкл."};
+            static const char *const t_nightmode[] = {"Nachtmodus", "Night mode", "Ночной режим"};
+            static const char *const t_wake[] = {"Weckton", "Wake sound", "Звук активации"};
+            static const char *const t_language[] = {"Sprache", "Language", "Язык"};
+            lv_label_set_text(id(lbl_settings_title), t_settings[lang]);
+            lv_label_set_text(id(lbl_set_volume), t_volume[lang]);
+            lv_label_set_text(id(lbl_set_display), t_display[lang]);
+            lv_label_set_text(id(lbl_set_night), t_night[lang]);
+            lv_label_set_text(id(lbl_set_ring), t_ring[lang]);
+            lv_label_set_text(id(lbl_set_mic), t_mic[lang]);
+            lv_label_set_text(id(lbl_set_nightmode), t_nightmode[lang]);
+            lv_label_set_text(id(lbl_set_wake), t_wake[lang]);
+            lv_label_set_text(id(lbl_set_language), t_language[lang]);
+            static const char *const t_wifi[] = {"WLAN", "Wi-Fi", "Wi-Fi"};
+            static const char *const t_scan[] = {"Suchen", "Search", "Поиск"};
+            lv_label_set_text(id(lbl_set_wifi), t_wifi[lang]);
+            lv_label_set_text(id(lbl_wifi_title), t_wifi[lang]);
+            lv_label_set_text(id(lbl_wifi_scan), t_scan[lang]);
           }
-          static std::string shown_timer;
-          std::string text;
-          if (next != nullptr) {
-            uint32_t s = next->seconds_left;
+
+          // the running timers: one with its name, several as T1, T2, ...
+          std::vector<const voice_assistant::Timer *> running;
+          for (const auto &t : id(va).get_timers()) {
+            if (t.is_active) running.push_back(&t);
+          }
+          std::sort(running.begin(), running.end(),
+                    [](const voice_assistant::Timer *a, const voice_assistant::Timer *b) { return a->seconds_left < b->seconds_left; });
+          auto clock_text = [](uint32_t s) {
             char buf[16];
             if (s >= 3600) snprintf(buf, sizeof(buf), "%u:%02u:%02u", unsigned(s / 3600), unsigned(s / 60 % 60), unsigned(s % 60));
             else snprintf(buf, sizeof(buf), "%u:%02u", unsigned(s / 60), unsigned(s % 60));
-            text = next->name.empty() ? std::string(buf) : next->name + "  " + buf;
+            return std::string(buf);
+          };
+          std::string timers;
+          if (running.size() == 1) {
+            timers = running[0]->name.empty() ? clock_text(running[0]->seconds_left)
+                                              : running[0]->name + "  " + clock_text(running[0]->seconds_left);
+          } else {
+            for (size_t i = 0; i < running.size() && i < 3; i++) {
+              if (i) timers += "   ";
+              timers += "T" + std::to_string(i + 1) + " " + clock_text(running[i]->seconds_left);
+            }
           }
-          if (text != shown_timer) {
-            shown_timer = text;
-            lv_label_set_text(id(lbl_timer), text.c_str());
-            if (text.empty()) lv_obj_add_flag(id(lbl_timer), LV_OBJ_FLAG_HIDDEN);
+          static std::string shown_timers;
+          if (timers != shown_timers) {
+            shown_timers = timers;
+            lv_label_set_text(id(lbl_timer), timers.c_str());
+            if (timers.empty()) lv_obj_add_flag(id(lbl_timer), LV_OBJ_FLAG_HIDDEN);
             else lv_obj_clear_flag(id(lbl_timer), LV_OBJ_FLAG_HIDDEN);
           }
 
@@ -268,7 +952,6 @@ interval:
             if (ringing) {
               static const char *const stop[] = {"Stopp", "Stop", "Стоп"};
               static const char *const timer[] = {"Timer", "Timer", "Таймер"};
-              size_t lang = id(display_language).active_index().value_or(0) % 3;
               lv_label_set_text(id(lbl_stop), stop[lang]);
               lv_label_set_text(id(lbl_ring_name), id(next_timer_name).state == "-" ? timer[lang] : id(next_timer_name).state.c_str());
               lv_obj_clear_flag(id(ring_box), LV_OBJ_FLAG_HIDDEN);
@@ -277,9 +960,52 @@ interval:
             }
           }
 
+          // the volume while it changes (buttons, voice, ioBroker, the slider)
+          static int shown_volume = -1;
+          static uint32_t volume_until = 0;
+          int volume = int(id(external_media_player).volume * 100 + 0.5f);
+          if (shown_volume < 0) {
+            shown_volume = volume;  // not at the start
+          } else if (volume != shown_volume) {
+            shown_volume = volume;
+            lv_bar_set_value(id(volume_bar), volume, LV_ANIM_OFF);
+            lv_label_set_text(id(lbl_volume), (std::to_string(volume) + " %").c_str());
+            lv_obj_clear_flag(id(volume_box), LV_OBJ_FLAG_HIDDEN);
+            volume_until = millis() + 2000;
+          }
+          if (volume_until != 0 && int32_t(millis() - volume_until) > 0) {
+            volume_until = 0;
+            lv_obj_add_flag(id(volume_box), LV_OBJ_FLAG_HIDDEN);
+          }
+
+          // state of the assistant (the phases of the core, see voice_assist_*_phase_id)
+          static int shown_status = -100;
+          int phase = id(voice_assistant_phase);
+          bool muted = id(mic_mute_switch).state;
+          bool wifi_ok = wifi::global_wifi_component->is_connected();
+          int status = !wifi_ok ? 100 : (phase == ${voice_assist_idle_phase_id} && muted) ? 101 : phase;
+          if (status != shown_status) {
+            shown_status = status;
+            const char *icon = "";
+            uint32_t color = 0xFFFFFF;
+            switch (status) {
+              case 100: icon = "\U000F05AA"; color = 0xEF4444; break;  // no Wi-Fi
+              case 101: icon = "\U000F036D"; color = 0x9CA3AF; break;  // microphone muted
+              case ${voice_assist_waiting_for_command_phase_id}:
+              case ${voice_assist_listening_for_command_phase_id}: icon = "\U000F036C"; color = 0x38BDF8; break;
+              case ${voice_assist_thinking_phase_id}: icon = "\U000F01D8"; color = 0xFBBF24; break;
+              case ${voice_assist_replying_phase_id}: icon = "\U000F057E"; color = 0x4ADE80; break;
+              case ${voice_assist_not_ready_phase_id}: icon = "\U000F0319"; color = 0xEF4444; break;  // no assistant
+              case ${voice_assist_error_phase_id}: icon = "\U000F0028"; color = 0xEF4444; break;
+              default: break;  // idle: nothing
+            }
+            lv_label_set_text(id(lbl_status), icon);
+            lv_obj_set_style_text_color(id(lbl_status), lv_color_hex(color), 0);
+          }
+
           // backlight: day brightness, at night the night brightness unless something happens
           bool awake = ringing || id(va).is_running() ||
-                       !lv_obj_has_flag(id(confirm_box), LV_OBJ_FLAG_HIDDEN) ||
+                       !lv_obj_has_flag(id(dialog_box), LV_OBJ_FLAG_HIDDEN) ||
                        (id(lcd_last_touch) != 0 && millis() - id(lcd_last_touch) < 10000);
           float day = id(lcd_day_brightness).state / 100.0f;
           float target = (id(night_mode).state && !awake) ? id(lcd_night_brightness).state / 100.0f : day;
@@ -292,8 +1018,123 @@ interval:
             else call.set_state(true).set_brightness(target);
             call.perform();
           }
+
   - interval: 1s
     then:
+      - lambda: id(uptime_s) += 1;
+      # no Wi-Fi a while after the start (a new device, or the network is gone): open the Wi-Fi page once
+      - if:
+          condition:
+            lambda: |-
+              return !id(wifi_page_opened) && id(uptime_s) > 25 && !wifi::global_wifi_component->is_connected();
+          then:
+            - lambda: id(wifi_page_opened) = true;
+            - lvgl.page.show: page_wifi
+      # the Wi-Fi pages: current state and the list of networks
+      - lambda: |-
+          size_t lang = id(display_language).active_index().value_or(0) % 3;
+          auto *wifi = wifi::global_wifi_component;
+          char ssid[wifi::SSID_BUFFER_SIZE] = "";
+          if (wifi->is_connected()) wifi->wifi_ssid_to(ssid);
+          lv_label_set_text(id(lbl_set_wifi_ssid), ssid[0] ? ssid : "-");
+          if (!id(page_wifi)->is_showing()) return;
+
+          static const char *const t_conn[] = {"Verbunden mit", "Connected to", "Подключено к"};
+          static const char *const t_trying[] = {"Verbinde mit", "Connecting to", "Подключение к"};
+          static const char *const t_failed[] = {"Keine Verbindung - Passwort prüfen",
+                                                 "No connection - check the password",
+                                                 "Нет соединения - проверьте пароль"};
+          static const char *const t_none[] = {"Nicht verbunden", "Not connected", "Не подключено"};
+          char state[96];
+          bool trying = id(wifi_connect_started) != 0;
+          if (wifi->is_connected() && (!trying || id(wifi_selected) == ssid)) {
+            snprintf(state, sizeof(state), "%s %s (%d dBm)", t_conn[lang], ssid, int(wifi->wifi_rssi()));
+            id(wifi_connect_started) = 0;
+          } else if (trying && millis() - id(wifi_connect_started) < 30000) {
+            snprintf(state, sizeof(state), "%s %s ...", t_trying[lang], id(wifi_selected).c_str());
+          } else if (trying) {
+            snprintf(state, sizeof(state), "%s", t_failed[lang]);
+          } else {
+            snprintf(state, sizeof(state), "%s", t_none[lang]);
+          }
+          lv_label_set_text(id(lbl_wifi_state), state);
+
+          // the networks: each name once with its strongest signal, strongest first
+          std::vector<std::pair<std::string, int>> nets;
+          std::vector<bool> auth;
+          for (const auto &r : wifi->get_scan_result()) {
+            if (r.get_is_hidden()) continue;
+            std::string name(r.get_ssid().c_str(), r.get_ssid().size());
+            bool found = false;
+            for (size_t i = 0; i < nets.size(); i++) {
+              if (nets[i].first == name) {
+                found = true;
+                if (r.get_rssi() > nets[i].second) nets[i].second = r.get_rssi();
+              }
+            }
+            if (!found) {
+              nets.push_back({name, r.get_rssi()});
+              auth.push_back(r.get_with_auth());
+            }
+          }
+          std::vector<size_t> order(nets.size());
+          for (size_t i = 0; i < order.size(); i++) order[i] = i;
+          std::sort(order.begin(), order.end(), [&](size_t a, size_t b) { return nets[a].second > nets[b].second; });
+          if (order.size() > 12) order.resize(12);
+          uint32_t sig = order.size();
+          for (size_t i : order) for (char c : nets[i].first) sig = sig * 31 + c;
+          if (sig == id(wifi_list_shown)) return;
+          id(wifi_list_shown) = sig;
+
+          static const char *const t_open[] = {"offen  ", "open  ", "открытая  "};
+          lv_obj_t *list = id(wifi_list);
+          lv_obj_clean(list);
+          id(wifi_ssids).clear();
+          id(wifi_auth).clear();
+          for (size_t i : order) {
+            size_t index = id(wifi_ssids).size();
+            id(wifi_ssids).push_back(nets[i].first);
+            id(wifi_auth).push_back(auth[i]);
+            lv_obj_t *btn = lv_button_create(list);
+            lv_obj_set_size(btn, lv_pct(100), 38);
+            lv_obj_set_style_bg_color(btn, lv_color_hex(nets[i].first == ssid ? 0x0C4A6E : 0x1E293B), 0);
+            lv_obj_set_style_shadow_width(btn, 0, 0);
+            lv_obj_t *name = lv_label_create(btn);
+            lv_label_set_long_mode(name, LV_LABEL_LONG_MODE_DOTS);
+            lv_obj_set_width(name, 190);
+            lv_label_set_text(name, nets[i].first.c_str());
+            lv_obj_set_style_text_font(name, id(font_small), 0);
+            lv_obj_align(name, LV_ALIGN_LEFT_MID, 0, 0);
+            lv_obj_t *info = lv_label_create(btn);
+            char buf[40];
+            snprintf(buf, sizeof(buf), "%s%d dBm", auth[i] ? "" : t_open[lang], nets[i].second);
+            lv_label_set_text(info, buf);
+            lv_obj_set_style_text_font(info, id(font_small), 0);
+            lv_obj_set_style_text_color(info, lv_color_hex(0x94A3B8), 0);
+            lv_obj_align(info, LV_ALIGN_RIGHT_MID, 0, 0);
+            lv_obj_add_event_cb(btn, [](lv_event_t *e) {
+              size_t i = (size_t) (uintptr_t) lv_event_get_user_data(e);
+              if (i >= id(wifi_ssids).size()) return;
+              id(wifi_selected) = id(wifi_ssids)[i];
+              if (!id(wifi_auth)[i]) {
+                // an open network: connect at once
+                wifi::global_wifi_component->save_wifi_sta(id(wifi_selected), std::string());
+                id(wifi_connect_started) = millis();
+                return;
+              }
+              lv_label_set_text(id(lbl_pass_ssid), id(wifi_selected).c_str());
+              lv_textarea_set_text(id(ta_pass), "");
+              id(lvgl_comp)->show_page(id(page_wifi_pass)->index, LV_SCREEN_LOAD_ANIM_NONE, 0);
+            }, LV_EVENT_CLICKED, (void *) (uintptr_t) index);
+          }
+      # other pages fall back to the clock after a minute without a touch
+      - if:
+          condition:
+            lambda: |-
+              return !id(page_clock)->is_showing() && !id(page_wifi)->is_showing() &&
+                     !id(page_wifi_pass)->is_showing() && millis() - id(lcd_last_touch) > 60000;
+          then:
+            - lvgl.page.show: page_clock
       - lvgl.label.update:
           id: lbl_time
           text: !lambda |-
@@ -322,65 +1163,145 @@ interval:
             const char *day = days[lang][now.day_of_week - 1];
             const char *month = months[lang][now.month - 1];
             char buf[64];
-            if (lang == 0) snprintf(buf, sizeof(buf), "%s, %d. %s %d", day, now.day_of_month, month, now.year);
-            else if (lang == 1) snprintf(buf, sizeof(buf), "%s, %s %d, %d", day, month, now.day_of_month, now.year);
-            else snprintf(buf, sizeof(buf), "%s, %d %s %d", day, now.day_of_month, month, now.year);
+            // without the year: "Donnerstag, 30. September 2026" does not fit 320 px
+            if (lang == 0) snprintf(buf, sizeof(buf), "%s, %d. %s", day, now.day_of_month, month);
+            else if (lang == 1) snprintf(buf, sizeof(buf), "%s, %s %d", day, month, now.day_of_month);
+            else snprintf(buf, sizeof(buf), "%s, %d %s", day, now.day_of_month, month);
             return std::string(buf);
+      # the alarm of the core, when it is on
+      - lambda: |-
+          std::string text;
+          if (id(alarm_on).state && id(alarm_time).has_state() && id(alarm_time).state.size() == 5) {
+            text = "\U000F0020 " + id(alarm_time).state;
+          }
+          static std::string shown;
+          if (text != shown) {
+            shown = text;
+            lv_label_set_text(id(lbl_alarm), text.c_str());
+            if (text.empty()) lv_obj_add_flag(id(lbl_alarm), LV_OBJ_FLAG_HIDDEN);
+            else lv_obj_clear_flag(id(lbl_alarm), LV_OBJ_FLAG_HIDDEN);
+          }
+      # the values page
+      - lambda: |-
+          auto show = [](lv_obj_t *label, float v, int decimals, const char *unit) {
+            char buf[32];
+            if (std::isnan(v) || v <= -999998.0f) snprintf(buf, sizeof(buf), "–");
+            else snprintf(buf, sizeof(buf), "%.*f%s%s", decimals, v, unit[0] ? " " : "", unit);
+            lv_label_set_text(label, buf);
+          };
+          show(id(lbl_value_1), id(value_1).state, ${value_1_decimals}, "${value_1_unit}");
+          show(id(lbl_value_2), id(value_2).state, ${value_2_decimals}, "${value_2_unit}");
+          show(id(lbl_value_3), id(value_3).state, ${value_3_decimals}, "${value_3_unit}");
+          show(id(lbl_value_4), id(value_4).state, ${value_4_decimals}, "${value_4_unit}");
+      # the system page, while it is shown
+      - if:
+          condition:
+            lambda: return id(page_system)->is_showing();
+          then:
+            - lambda: |-
+                size_t lang = id(display_language).active_index().value_or(0) % 3;
+                static const char *const t_up[] = {"Laufzeit", "Uptime", "Работает"};
+                static const char *const t_mem[] = {"Speicher frei", "Free memory", "Свободно"};
+                static const char *const t_assist[] = {"Assistent", "Assistant", "Ассистент"};
+                static const char *const t_yes[] = {"verbunden", "connected", "подключён"};
+                static const char *const t_no[] = {"getrennt", "disconnected", "нет связи"};
+                auto *wifi = wifi::global_wifi_component;
+                std::string ip = "-";
+                if (wifi->is_connected()) {
+                  for (auto &addr : wifi->get_ip_addresses()) {
+                    if (addr.is_ip4()) { char b[network::IP_ADDRESS_BUFFER_SIZE]; ip = addr.str_to(b); break; }
+                  }
+                }
+                uint32_t s = id(uptime_s);
+                char up[32];
+                snprintf(up, sizeof(up), "%ud %02u:%02u", unsigned(s / 86400), unsigned(s / 3600 % 24), unsigned(s / 60 % 60));
+                char ssid[wifi::SSID_BUFFER_SIZE] = "-";
+                if (wifi->is_connected()) wifi->wifi_ssid_to(ssid);
+                char buf[400];
+                snprintf(buf, sizeof(buf),
+                         "Wi-Fi: %s (%d dBm)\nIP: %s\n%s: %s\n%s: %u KB RAM, %u KB PSRAM\n%s: %s\nESPHome %s",
+                         ssid, int(wifi->wifi_rssi()), ip.c_str(),
+                         t_up[lang], up, t_mem[lang],
+                         unsigned(heap_caps_get_free_size(MALLOC_CAP_INTERNAL) / 1024),
+                         unsigned(heap_caps_get_free_size(MALLOC_CAP_SPIRAM) / 1024), t_assist[lang],
+                         api::global_api_server->is_connected() ? t_yes[lang] : t_no[lang], ESPHOME_VERSION);
+                lv_label_set_text(id(lbl_system), buf);
+                static const char *const t_title[] = {"System", "System", "Система"};
+                lv_label_set_text(id(lbl_system_title), t_title[lang]);
 
-# Show a question of the assistant: an answer after which it listens again (a follow-up). Added to the
-# triggers of the core (lists of a package are appended).
-globals:
-  - id: lcd_last_touch
-    type: uint32_t
-    restore_value: false
-    initial_value: '0'
-  - id: last_answer
-    type: std::string
-    restore_value: false
-
+# The conversation on the screen. Added to the triggers of the core (lists of a package are appended).
 voice_assistant:
+  on_stt_end:
+    # what was heard: a new turn
+    - lambda: |-
+        id(dialog_hide).stop();
+        std::string heard = x;
+        lv_label_set_text(id(lbl_heard), heard.empty() ? "" : ("«" + heard + "»").c_str());
+        lv_label_set_text(id(lbl_answer), "");
+        lv_obj_add_flag(id(lbl_hint), LV_OBJ_FLAG_HIDDEN);
+        id(dlg_answer).clear();
+        id(dlg_question) = false;
+        if (!heard.empty()) lv_obj_clear_flag(id(dialog_box), LV_OBJ_FLAG_HIDDEN);
   on_tts_start:
     - lambda: |-
         std::string text = x;
         auto pos = text.find("[[");
         if (pos != std::string::npos) text = text.substr(0, pos);
         while (!text.empty() && isspace((unsigned char) text.back())) text.pop_back();
-        if (text.size() > 300) text = "…" + text.substr(text.size() - 300);
         // only a question waits for an answer; the assistant also listens again after a plain answer
-        id(last_answer) = text.find('?') != std::string::npos ? text : std::string();
+        id(dlg_question) = text.find('?') != std::string::npos;
+        if (text.size() > 240) {
+          // a question keeps its end (the question), an answer its start
+          text = id(dlg_question) ? "…" + text.substr(text.size() - 240) : text.substr(0, 240) + "…";
+        }
+        id(dlg_answer) = text;
+        lv_label_set_text(id(lbl_answer), text.c_str());
+        if (!text.empty()) lv_obj_clear_flag(id(dialog_box), LV_OBJ_FLAG_HIDDEN);
   on_listening:
-    # listening again right after an answer: the assistant waits for the reply to it
+    # listening again right after a question: it waits for the reply
     - if:
         condition:
-          lambda: return !id(last_answer).empty();
+          lambda: return id(dlg_question) && !id(dlg_answer).empty();
         then:
+          - script.stop: dialog_hide
           - lambda: |-
               static const char *const hints[] = {"Sag „Ja“ oder „Nein“", "Say “yes” or “no”", "Скажите «да» или «нет»"};
               lv_label_set_text(id(lbl_hint), hints[id(display_language).active_index().value_or(0) % 3]);
-              lv_label_set_text(id(lbl_question), id(last_answer).c_str());
-              lv_obj_clear_flag(id(confirm_box), LV_OBJ_FLAG_HIDDEN);
-          - script.stop: confirm_hide
-  on_stt_end:
-    - script.execute: confirm_close
+              lv_label_set_text(id(lbl_heard), "");
+              lv_obj_clear_flag(id(lbl_hint), LV_OBJ_FLAG_HIDDEN);
+              lv_obj_clear_flag(id(dialog_box), LV_OBJ_FLAG_HIDDEN);
   on_end:
-    - script.execute: confirm_hide
+    - script.execute: dialog_hide
 
 script:
-  # The user answered: back to the clock.
-  - id: confirm_close
+  # Scan all networks. ESPHome's own scans see only the configured network (and are skipped while the
+  # signal is good), so the scan is started directly; ESPHome takes the results and keeps all of them.
+  # Between the channels the radio returns to the home channel, so the connection stays.
+  - id: wifi_scan
     then:
-      - lambda: id(last_answer).clear();
-      - lvgl.widget.hide: confirm_box
+      - lambda: |-
+          wifi::global_wifi_component->set_keep_scan_results(true);
+          wifi_scan_config_t config{};
+          config.show_hidden = false;
+          config.scan_type = WIFI_SCAN_TYPE_ACTIVE;
+          config.scan_time.active.min = 80;
+          config.scan_time.active.max = 200;
+          config.home_chan_dwell_time = 50;
+          esp_err_t err = esp_wifi_scan_start(&config, false);
+          ESP_LOGI("wifi_ui", "Scan started: %s", esp_err_to_name(err));
+          id(wifi_list_shown) = 0xFFFFFFFF;
   # A run ended: after a follow-up the assistant starts listening again at once; when it does not, the
-  # answer needs no reply (or none came): back to the clock.
-  - id: confirm_hide
+  # conversation is over. The answer stays a few seconds for reading.
+  - id: dialog_hide
     mode: restart
     then:
-      - delay: 4s
+      - delay: 6s
       - if:
           condition:
             not:
               voice_assistant.is_running:
           then:
-            - lambda: id(last_answer).clear();
-            - lvgl.widget.hide: confirm_box
+            - lambda: |-
+                id(dlg_answer).clear();
+                id(dlg_question) = false;
+            - lvgl.widget.hide: dialog_box

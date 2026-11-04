@@ -67,6 +67,24 @@ You  ──▶  Waveshare ESP32-S3  ──▶  Home Assistant Assist
 
 https://github.com/user-attachments/assets/3236cd4f-7184-4eee-a16a-0db6fe1603a3
 
+## Ready-made firmware
+
+No ESPHome build needed: open the install page
+**https://sadam6752-tech.github.io/esphome-waveshare-esp32-s3-audio-va/**
+in Chrome or Edge, connect the board by USB-C and press **Install** - with or
+without the touch display. Then set up Wi-Fi: on the page right after
+flashing (Improv), on the display (Settings > Wi-Fi: scan, pick, password on
+the keyboard), or through the access point **Waveshare-VA Setup** that the
+board opens when no network is reachable. Updates arrive over the air as the
+**Firmware** update entity (checked every 6 hours).
+
+The ready-made firmware is made for ioBroker.assistant: the clock comes from
+NTP, the wake word "ioBroker" is built in, the time zone is Germany (change
+it with the `set_time_zone` action) and the device name gets the end of the
+MAC address, so several boards do not clash. It is built by
+`.github/workflows/release.yml` from `release-display.yaml` and
+`release-core.yaml` on every tag `v*`.
+
 ## Quick start
 
 > Requires **ESPHome 2026.8.0+**.
@@ -135,6 +153,10 @@ secrets.example.yaml       # copy to secrets.yaml
 base/
   core.yaml                # the always-on core, pulled as a remote package
   display.yaml             # optional: the 2.8inch touch display
+  release.yaml             # shared part of the ready-made firmware
+release-display.yaml       # ready-made firmware with the display
+release-core.yaml          # ready-made firmware without a display
+install/index.html         # install page (ESP Web Tools) on GitHub Pages
 components/
   cst3530/                 # touch controller of the display (Rev 1.1), not in ESPHome
 ci/
@@ -223,18 +245,33 @@ packages:
 `display.yaml` loads the touch driver from the local `components/` folder, so
 it is not pulled as a remote package.
 
-What it shows:
+What it shows (landscape, 320x240). Swipe from the clock to the right for the
+system page, to the left for the values page; the gear opens the settings.
+Other pages fall back to the clock after a minute without a touch.
 
-- **Idle**: the clock and the date (landscape, 320x240).
-- **Timer**: while a timer runs, its name and the countdown at the bottom.
+- **Clock**: the time, the date without the year (a German weekday and month
+  with the year do not fit), the alarm of the core when it is on, and the
+  running timers at the bottom: one with its name, several as `T1 4:59  T2 12:00`.
+- **State of the assistant**: a small icon in the top right corner on every
+  page - a blue microphone while it listens, amber dots while it thinks, a
+  green speaker while it answers, red for no connection to the assistant, no
+  Wi-Fi or an error, a grey crossed-out microphone while the microphone is
+  muted. Nothing when it is idle.
+- **Conversation**: what the satellite heard and the answer of the assistant,
+  a few seconds after the end. When the assistant asks something and listens
+  again for the answer (for example "Turn on the lamp? Say yes or no."), a
+  hint to answer by voice is added. Only a text with a "?" counts as a
+  question. There are no yes/no buttons, because a satellite cannot send a
+  text to the assistant.
+- **Volume**: a bar for two seconds whenever the volume changes.
 - **Ringing**: a ringing timer or alarm fills the screen with a red "Stop";
   a touch anywhere silences it, like the Play/Pause button.
-- **A question of the assistant**: when the assistant asks something and
-  listens again for the answer (for example "Turn on the lamp? Say yes or
-  no."), the question is shown with a hint to answer by voice. Only a text
-  with a "?" counts as a question. The answer is given by voice; the display
-  has no yes/no buttons, because a satellite cannot send a text to the
-  assistant.
+- **System** (swipe right): Wi-Fi with signal, IP, uptime, free memory, the
+  connection to the assistant, the ESPHome version.
+- **Values** (swipe left): four tiles with numbers that something else writes
+  into the entities **Value 1** ... **Value 4** (see below).
+- **Settings** (gear): volume, display brightness by day and at night, LED
+  ring brightness, microphone off, night mode, wake sound, language.
 
 Entities of the display:
 
@@ -243,6 +280,34 @@ Entities of the display:
 | **Display language** | `Deutsch` | Language of the date and the texts on the screen: Deutsch, English, Русский. The satellite does not learn the language of the assistant, so it is set here. The first value comes from the substitution `display_language`. |
 | **Display brightness** | 100 % | Backlight during the day. |
 | **Display night brightness** | 0 % | Backlight while **Night mode** is on; 0 turns it off. A touch lights the display for 10 seconds, and it lights by itself while you talk to the assistant or a timer rings. |
+
+**Values from ioBroker.** ioBroker.assistant shows the entities of the
+satellite as states, and writing such a state sets the entity. So a script
+fills the values page; the labels, units and decimals are substitutions in
+your `waveshare-va.yaml`:
+
+```yaml
+substitutions:
+  value_1_label: "Außen"
+  value_1_unit: "°C"
+  value_1_decimals: "1"
+```
+
+```js
+// ioBroker JavaScript: copy states to the values page of the satellite "Gast"
+const target = 'assistant.0.satellites.Gast.controls.';
+const values = {
+    value_1: 'hm-rpc.0.ABC123.1.TEMPERATURE', // your states
+    value_2: 'mqtt.0.livingroom.humidity',
+};
+for (const [slot, source] of Object.entries(values)) {
+    const copy = val => setState(target + slot, Number(val)); // ack false = a command to the device
+    on({ id: source, change: 'ne' }, obj => copy(obj.state.val));
+    getState(source, (err, state) => state && copy(state.val));
+}
+```
+
+A value of -999999 (the start value) is shown as "–".
 
 **Which touch controller?** The display exists in two versions. **Rev 1.1**
 (V2, printed on the back) has a **CST3530** at I2C 0x58, which ESPHome does

@@ -1,0 +1,61 @@
+###############################################################################
+# Ready-made firmware (GitHub releases), shared by release-display.yaml and release-core.yaml.
+#
+# No secrets in it: Wi-Fi is set up after flashing - on the display (Settings > Wi-Fi), in the browser
+# right after flashing (Improv), or through the setup access point "Waveshare-VA Setup" that opens when
+# no network is reachable. Updates come from the GitHub releases (update entity "Firmware").
+# Driven by ioBroker.assistant: clock from NTP, the wake word "ioBroker" built in.
+###############################################################################
+
+substitutions:
+  # set by the release workflow
+  release_version: "dev"
+  release_variant: "display"
+  release_build_path: ".esphome/build/${name}-${release_variant}"
+  release_pages: "https://sadam6752-tech.github.io/esphome-waveshare-esp32-s3-audio-va"
+  # Germany; the time zone can be changed with the set_time_zone action
+  posix_timezone: "CET-1CEST,M3.5.0,M10.5.0/3"
+
+esphome:
+  name_add_mac_suffix: true
+  build_path: ${release_build_path}
+  project:
+    name: sadam6752-tech.waveshare-va
+    version: ${release_version}
+
+# No network in the firmware: the one set up on the device is saved in flash.
+wifi:
+  ap:
+    ssid: "Waveshare-VA Setup"
+    ap_timeout: 1min
+
+captive_portal:
+
+improv_serial:
+
+# The device is driven by ioBroker.assistant, which does not answer the time request of the native API.
+time:
+  - id: !extend rtc
+    platform: sntp
+    servers:
+      - 0.pool.ntp.org
+      - 1.pool.ntp.org
+
+micro_wake_word:
+  models:
+    - model: wakewords/iobroker.json
+      id: iobroker
+
+http_request:
+  timeout: 20s
+
+ota:
+  - platform: http_request
+    id: ota_http
+
+update:
+  - platform: http_request
+    id: firmware_update
+    name: Firmware
+    source: ${release_pages}/firmware/${release_variant}/manifest.json
+    update_interval: 6h

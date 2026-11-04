@@ -1,0 +1,17 @@
+# Ready-made firmware WITH the Waveshare 2.8inch Capacitive Touch LCD (built by .github/workflows/release.yml).
+# To build it yourself: esphome compile release-display.yaml (needs a secrets.yaml, e.g. a copy of
+# secrets.example.yaml: the Wi-Fi in it is removed below).
+
+substitutions:
+  name: waveshare-va
+  friendly_name: "Waveshare Voice"
+  release_variant: display
+
+packages:
+  core: !include base/core.yaml
+  display: !include base/display.yaml
+  release: !include base/release.yaml
+
+wifi:
+  ssid: !remove
+  password: !remove

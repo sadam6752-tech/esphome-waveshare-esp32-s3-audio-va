@@ -10,6 +10,15 @@
   New entities: Display language, Display brightness, Display night
   brightness (used while Night mode is on). The core is unchanged; without
   the package nothing changes.
+- **Display pages**: the conversation (what was heard, the answer, a hint for
+  a question), the volume while it changes, the alarm time, several timers as
+  T1/T2, a status icon, settings behind the gear, a system page (swipe right),
+  four values from ioBroker (swipe left, entities Value 1..4) and Wi-Fi setup
+  on the screen (scan, pick, password).
+- **Ready-made firmware**: `release-display.yaml` and `release-core.yaml` without
+  secrets, built and published by `.github/workflows/release.yml` on a tag,
+  with an install page (ESP Web Tools), Improv and a setup access point for
+  Wi-Fi, and OTA updates from GitHub Pages.
 - **CST3530 touch driver** (`components/cst3530`) for Rev 1.1 of that
   display, which ESPHome does not support.
 
