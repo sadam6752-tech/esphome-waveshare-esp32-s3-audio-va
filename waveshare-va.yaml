@@ -38,6 +38,21 @@ substitutions:
   # board plays back at 16 kHz mono, so a small 16 kHz mono file is plenty.
   # boot_sound_file: https://example.com/my-chime.mp3
 
+  # Values page of the display (base/display.yaml); an ioBroker script writes the numbers
+  # into assistant.0.satellites.Gast.controls.value_1 ... (test objects 0_userdata.0.codetest).
+  value_1_label: "Bad"
+  value_1_unit: "°C"
+  value_1_decimals: "1"
+  value_2_label: "Büro"
+  value_2_unit: "°C"
+  value_2_decimals: "1"
+  value_3_label: "Akku Bad"
+  value_3_unit: "%"
+  value_3_decimals: "0"
+  value_4_label: "Akku Büro"
+  value_4_unit: "%"
+  value_4_decimals: "0"
+
   # Mic gain, LED brightness, wake-word sensitivity and the alarm are all
   # exposed as entities in Home Assistant - no need to reflash to change them.
 
