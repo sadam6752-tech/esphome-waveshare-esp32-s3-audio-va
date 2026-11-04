@@ -57,6 +57,10 @@ You  ──▶  Waveshare ESP32-S3  ──▶  Home Assistant Assist
   (toggleable, and it also settles the amp so the ring boots silent).
 - **Night mode**: one switch dims the ring to its own brightness and skips the
   wake beep and boot chime. Drive it from any Home Assistant automation.
+- **Touch display (optional)**: the Waveshare 2.8inch Capacitive Touch LCD on
+  the LCD connector shows the clock and date, the running timer and a question
+  of the assistant; a touch stops a ringing timer or alarm. See
+  [Touch display](#touch-display-optional).
 - **Tunable live from HA**: the wake word, microphone mute, ES7210 mic gain, LED
   brightness and wake-word sensitivity are all entities, so there's no
   reflashing to tune it.
@@ -130,6 +134,9 @@ waveshare-va.yaml          # YOUR config: copy + edit this (pulls the rest from 
 secrets.example.yaml       # copy to secrets.yaml
 base/
   core.yaml                # the always-on core, pulled as a remote package
+  display.yaml             # optional: the 2.8inch touch display
+components/
+  cst3530/                 # touch controller of the display (Rev 1.1), not in ESPHome
 ci/
   build.yaml               # CI build target: compiles the core from the working tree
 .github/workflows/
@@ -196,6 +203,56 @@ automation:
         target:
           entity_id: switch.waveshare_va_night_mode
 ```
+
+### Touch display (optional)
+
+The board takes the **Waveshare 2.8inch Capacitive Touch LCD** (240x320,
+ST7789) on its 18-pin LCD connector. Plug the ribbon in with the board
+unpowered. Without a display nothing changes: the display lives in its own
+package, `base/display.yaml`, and the core does not need it.
+
+To use it, build from a local clone of this repository and add the package to
+your `waveshare-va.yaml`:
+
+```yaml
+packages:
+  core: !include base/core.yaml
+  display: !include base/display.yaml
+```
+
+`display.yaml` loads the touch driver from the local `components/` folder, so
+it is not pulled as a remote package.
+
+What it shows:
+
+- **Idle**: the clock and the date (landscape, 320x240).
+- **Timer**: while a timer runs, its name and the countdown at the bottom.
+- **Ringing**: a ringing timer or alarm fills the screen with a red "Stop";
+  a touch anywhere silences it, like the Play/Pause button.
+- **A question of the assistant**: when the assistant asks something and
+  listens again for the answer (for example "Turn on the lamp? Say yes or
+  no."), the question is shown with a hint to answer by voice. Only a text
+  with a "?" counts as a question. The answer is given by voice; the display
+  has no yes/no buttons, because a satellite cannot send a text to the
+  assistant.
+
+Entities of the display:
+
+| Entity | Default | What it does |
+|---|---|---|
+| **Display language** | `Deutsch` | Language of the date and the texts on the screen: Deutsch, English, Русский. The satellite does not learn the language of the assistant, so it is set here. The first value comes from the substitution `display_language`. |
+| **Display brightness** | 100 % | Backlight during the day. |
+| **Display night brightness** | 0 % | Backlight while **Night mode** is on; 0 turns it off. A touch lights the display for 10 seconds, and it lights by itself while you talk to the assistant or a timer rings. |
+
+**Which touch controller?** The display exists in two versions. **Rev 1.1**
+(V2, printed on the back) has a **CST3530** at I2C 0x58, which ESPHome does
+not support; `components/cst3530` is a driver for it, written after
+Waveshare's `esp_lcd_touch_cst3530` (Apache-2.0). The older version has a
+**CST328** at 0x1A: replace the `touchscreen:` block in `display.yaml` with
+ESPHome's own `platform: cst328` (not tested here).
+
+Touch points are logged at DEBUG level (`touch x=… y=…`), which helps when
+checking the orientation.
 
 ### Custom wake word models
 

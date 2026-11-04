@@ -2,6 +2,23 @@
 
 ## [Unreleased]
 
+### Added
+- **Optional touch display.** `base/display.yaml` drives the Waveshare
+  2.8inch Capacitive Touch LCD on the LCD connector: clock and date, the
+  running timer, a question of the assistant while it waits for the answer,
+  and a full-screen "Stop" that silences a ringing timer or alarm by touch.
+  New entities: Display language, Display brightness, Display night
+  brightness (used while Night mode is on). The core is unchanged; without
+  the package nothing changes.
+- **CST3530 touch driver** (`components/cst3530`) for Rev 1.1 of that
+  display, which ESPHome does not support.
+
+### Changed
+- **Timer ring.** 3 s of silence between two rings instead of 0.5 s, so the
+  wake word can be heard in the gap (the mic hears the speaker, there is no
+  echo cancellation). The ring gives up after 1 minute instead of 15. The
+  **Timer ringing** switch is visible, so a ring can also be stopped remotely.
+
 ### Changed
 - **Updates no longer need a clean build.** The example config now uses
   `refresh: 0s`, so every build fetches the latest `main` and a plain

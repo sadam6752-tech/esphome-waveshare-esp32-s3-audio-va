@@ -168,6 +168,10 @@ Kept for reference. This build is speaker + mics + ring + buttons only.
   MISO GPIO8, SDA3 GPIO6; RST EXIO0, TP_RST EXIO1, TP_INT EXIO2.
   ⚠️ Use the **wiki** table for the LCD, not the IDF demo's `bsp_board.h`, which
   contradicts it (proven stale, see the battery note).
+  Used by the optional `base/display.yaml` (Waveshare 2.8inch Capacitive Touch
+  LCD, ST7789 at 40 MHz SPI; touch on the shared I2C bus: CST3530 at 0x58 on
+  Rev 1.1, CST328 at 0x1A on the older version). TP_INT on EXIO2 cannot raise
+  an interrupt on the ESP, so the touch is polled every 50 ms.
 - **Camera (DVP, 24-pin FPC)**: D0 GPIO2, D1 GPIO17, D2 GPIO18, D3 GPIO39,
   D4 GPIO45, D5 GPIO46, D6 GPIO47, D7 GPIO48, VSYNC GPIO21, HREF GPIO1,
   PCLK/XCLK muxed GPIO44/43 or GPIO19/20, PWDN EXIO5.

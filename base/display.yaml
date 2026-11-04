@@ -1,0 +1,386 @@
+###############################################################################
+# Waveshare 2.8inch Capacitive Touch LCD (240x320, ST7789, touch CST3530 = Rev 1.1 / V2)
+# on the 18-pin LCD FPC of the ESP32-S3-AUDIO-Board.
+#
+# Idle screen: clock, date and the running timer. A ringing timer or alarm is stopped by a touch anywhere.
+# Night mode of the core dims the backlight; a touch lights it for a few seconds. When the assistant asks something back (it listens again right after its
+# answer, e.g. to confirm an action), its question is shown with a hint to answer by voice. Optional: the core does not need it.
+# Include it from your thin config:
+#   packages:
+#     core: !include base/core.yaml
+#     display: !include base/display.yaml
+#
+# Pins (board wiki): CS GPIO3, SCK GPIO4, BL GPIO5, DC GPIO7, MOSI GPIO9, RST EXIO0;
+# touch on the shared I2C bus at 0x58, TP_RST EXIO1, TP_INT EXIO2 (polled, the expander has no interrupt
+# wired to the ESP).
+###############################################################################
+
+substitutions:
+  # Language of the display at the first start (Deutsch, English, Русский); later the select
+  # "Display language" (the satellite does not learn the language of the assistant).
+  display_language: Deutsch
+
+external_components:
+  - source:
+      type: local
+      path: components
+    components: [cst3530]
+
+spi:
+  - id: lcd_spi
+    clk_pin: GPIO4
+    mosi_pin: GPIO9
+    interface: hardware
+
+display:
+  - platform: mipi_spi
+    id: lcd
+    model: ST7789V
+    spi_id: lcd_spi
+    cs_pin: GPIO3
+    dc_pin: GPIO7
+    reset_pin:
+      tca9555: ioexp
+      number: 0
+    data_rate: 40MHz
+    invert_colors: true
+    color_order: rgb
+    dimensions:
+      width: 240
+      height: 320
+    auto_clear_enabled: false
+    update_interval: never
+
+touchscreen:
+  - platform: cst3530
+    id: touch
+    display: lcd
+    i2c_id: internal_i2c
+    reset_pin:
+      tca9555: ioexp
+      number: 1
+    interrupt_pin:
+      tca9555: ioexp
+      number: 2
+    on_touch:
+      - lambda: id(lcd_last_touch) = millis();
+      - logger.log:
+          level: DEBUG
+          format: "touch x=%d y=%d"
+          args: [touch.x, touch.y]
+
+output:
+  - platform: ledc
+    id: lcd_backlight_pwm
+    pin: GPIO5
+    frequency: 20kHz
+
+light:
+  # Driven by the two brightness numbers below and night mode (see the interval).
+  - platform: monochromatic
+    id: lcd_backlight
+    internal: true
+    output: lcd_backlight_pwm
+    restore_mode: ALWAYS_ON
+    default_transition_length: 500ms
+
+select:
+  # Read by the lambdas only (no on_value: a restored select fires it during setup).
+  - platform: template
+    id: display_language
+    name: "Display language"
+    icon: "mdi:translate"
+    entity_category: config
+    optimistic: true
+    restore_value: true
+    initial_option: "${display_language}"
+    options: [Deutsch, English, Русский]
+
+number:
+  - platform: template
+    id: lcd_day_brightness
+    name: "Display brightness"
+    icon: "mdi:brightness-6"
+    entity_category: config
+    optimistic: true
+    restore_value: true
+    initial_value: 100
+    min_value: 5
+    max_value: 100
+    step: 5
+    unit_of_measurement: "%"
+  # With night mode on (switch of the core); 0 = off. Talking to the assistant, a ringing timer or a touch
+  # light the display at day brightness.
+  - platform: template
+    id: lcd_night_brightness
+    name: "Display night brightness"
+    icon: "mdi:brightness-4"
+    entity_category: config
+    optimistic: true
+    restore_value: true
+    initial_value: 0
+    min_value: 0
+    max_value: 100
+    step: 5
+    unit_of_measurement: "%"
+
+font:
+  - file: "gfonts://Roboto@500"
+    id: font_clock
+    size: 96
+    glyphs: "0123456789:"
+  - file: "gfonts://Roboto"
+    id: font_date
+    size: 26
+    glyphsets: [GF_Latin_Core, GF_Cyrillic_Core]
+  - file: "gfonts://Roboto"
+    id: font_text
+    size: 22
+    glyphsets: [GF_Latin_Core, GF_Cyrillic_Core]
+  - file: "gfonts://Roboto@500"
+    id: font_stop
+    size: 64
+    glyphs: "StopСтп"
+
+lvgl:
+  displays: [lcd]
+  touchscreens: [touch]
+  rotation: 90
+  buffer_size: 25%
+  style_definitions:
+    - id: screen_style
+      bg_color: 0x000000
+      text_color: 0xFFFFFF
+  top_layer:
+    widgets:
+      # The question of the assistant, over the clock while it waits for the answer.
+      - obj:
+          id: confirm_box
+          hidden: true
+          width: 100%
+          height: 100%
+          bg_color: 0x101828
+          bg_opa: COVER
+          border_width: 0
+          radius: 0
+          pad_all: 14
+          widgets:
+            - label:
+                id: lbl_question
+                align: TOP_MID
+                width: 100%
+                long_mode: WRAP
+                text_align: CENTER
+                text_font: font_text
+                text_color: 0xFFFFFF
+                text: ""
+            - label:
+                id: lbl_hint
+                align: BOTTOM_MID
+                text_font: font_text
+                text_color: 0x7DD3FC
+                text: ""
+      # A ringing timer or alarm: a touch anywhere stops it.
+      - obj:
+          id: ring_box
+          hidden: true
+          width: 100%
+          height: 100%
+          bg_color: 0xB91C1C
+          bg_opa: COVER
+          border_width: 0
+          radius: 0
+          on_press:
+            - switch.turn_off: timer_ringing
+          widgets:
+            - label:
+                id: lbl_stop
+                align: CENTER
+                y: -10
+                text_font: font_stop
+                text_color: 0xFFFFFF
+                text: "Stop"
+            - label:
+                id: lbl_ring_name
+                align: BOTTOM_MID
+                y: -6
+                text_font: font_text
+                text_color: 0xFECACA
+                text: ""
+  pages:
+    - id: page_clock
+      bg_color: 0x000000
+      widgets:
+        - label:
+            id: lbl_time
+            align: CENTER
+            y: -20
+            text_font: font_clock
+            text_color: 0xFFFFFF
+            text: "--:--"
+        - label:
+            id: lbl_date
+            align: CENTER
+            y: 60
+            text_font: font_date
+            text_color: 0xA0A0A0
+            text: ""
+        - label:
+            id: lbl_timer
+            hidden: true
+            align: BOTTOM_MID
+            y: -10
+            text_font: font_date
+            text_color: 0xFBBF24
+            text: ""
+
+interval:
+  # Timer, ringing and backlight follow the core.
+  - interval: 250ms
+    then:
+      - lambda: |-
+          // the running timer that ends first
+          const voice_assistant::Timer *next = nullptr;
+          for (const auto &t : id(va).get_timers()) {
+            if (t.is_active && (next == nullptr || t.seconds_left < next->seconds_left)) next = &t;
+          }
+          static std::string shown_timer;
+          std::string text;
+          if (next != nullptr) {
+            uint32_t s = next->seconds_left;
+            char buf[16];
+            if (s >= 3600) snprintf(buf, sizeof(buf), "%u:%02u:%02u", unsigned(s / 3600), unsigned(s / 60 % 60), unsigned(s % 60));
+            else snprintf(buf, sizeof(buf), "%u:%02u", unsigned(s / 60), unsigned(s % 60));
+            text = next->name.empty() ? std::string(buf) : next->name + "  " + buf;
+          }
+          if (text != shown_timer) {
+            shown_timer = text;
+            lv_label_set_text(id(lbl_timer), text.c_str());
+            if (text.empty()) lv_obj_add_flag(id(lbl_timer), LV_OBJ_FLAG_HIDDEN);
+            else lv_obj_clear_flag(id(lbl_timer), LV_OBJ_FLAG_HIDDEN);
+          }
+
+          // ringing: the stop screen
+          static bool shown_ring = false;
+          bool ringing = id(timer_ringing).state;
+          if (ringing != shown_ring) {
+            shown_ring = ringing;
+            if (ringing) {
+              static const char *const stop[] = {"Stopp", "Stop", "Стоп"};
+              static const char *const timer[] = {"Timer", "Timer", "Таймер"};
+              size_t lang = id(display_language).active_index().value_or(0) % 3;
+              lv_label_set_text(id(lbl_stop), stop[lang]);
+              lv_label_set_text(id(lbl_ring_name), id(next_timer_name).state == "-" ? timer[lang] : id(next_timer_name).state.c_str());
+              lv_obj_clear_flag(id(ring_box), LV_OBJ_FLAG_HIDDEN);
+            } else {
+              lv_obj_add_flag(id(ring_box), LV_OBJ_FLAG_HIDDEN);
+            }
+          }
+
+          // backlight: day brightness, at night the night brightness unless something happens
+          bool awake = ringing || id(va).is_running() ||
+                       !lv_obj_has_flag(id(confirm_box), LV_OBJ_FLAG_HIDDEN) ||
+                       (id(lcd_last_touch) != 0 && millis() - id(lcd_last_touch) < 10000);
+          float day = id(lcd_day_brightness).state / 100.0f;
+          float target = (id(night_mode).state && !awake) ? id(lcd_night_brightness).state / 100.0f : day;
+          if (std::isnan(target)) target = 1.0f;
+          static float shown_level = -1.0f;
+          if (target != shown_level) {
+            shown_level = target;
+            auto call = id(lcd_backlight).make_call();
+            if (target <= 0.001f) call.set_state(false);
+            else call.set_state(true).set_brightness(target);
+            call.perform();
+          }
+  - interval: 1s
+    then:
+      - lvgl.label.update:
+          id: lbl_time
+          text: !lambda |-
+            auto now = id(rtc).now();
+            if (!now.is_valid()) return std::string("--:--");
+            char buf[6];
+            snprintf(buf, sizeof(buf), "%02d:%02d", now.hour, now.minute);
+            return std::string(buf);
+      - lvgl.label.update:
+          id: lbl_date
+          text: !lambda |-
+            static const char *const days[3][7] = {
+                {"Sonntag", "Montag", "Dienstag", "Mittwoch", "Donnerstag", "Freitag", "Samstag"},
+                {"Sunday", "Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday"},
+                {"воскресенье", "понедельник", "вторник", "среда", "четверг", "пятница", "суббота"}};
+            static const char *const months[3][12] = {
+                {"Januar", "Februar", "März", "April", "Mai", "Juni", "Juli", "August", "September", "Oktober",
+                 "November", "Dezember"},
+                {"January", "February", "March", "April", "May", "June", "July", "August", "September", "October",
+                 "November", "December"},
+                {"января", "февраля", "марта", "апреля", "мая", "июня", "июля", "августа", "сентября", "октября",
+                 "ноября", "декабря"}};
+            auto now = id(rtc).now();
+            if (!now.is_valid()) return std::string("");
+            size_t lang = id(display_language).active_index().value_or(0) % 3;
+            const char *day = days[lang][now.day_of_week - 1];
+            const char *month = months[lang][now.month - 1];
+            char buf[64];
+            if (lang == 0) snprintf(buf, sizeof(buf), "%s, %d. %s %d", day, now.day_of_month, month, now.year);
+            else if (lang == 1) snprintf(buf, sizeof(buf), "%s, %s %d, %d", day, month, now.day_of_month, now.year);
+            else snprintf(buf, sizeof(buf), "%s, %d %s %d", day, now.day_of_month, month, now.year);
+            return std::string(buf);
+
+# Show a question of the assistant: an answer after which it listens again (a follow-up). Added to the
+# triggers of the core (lists of a package are appended).
+globals:
+  - id: lcd_last_touch
+    type: uint32_t
+    restore_value: false
+    initial_value: '0'
+  - id: last_answer
+    type: std::string
+    restore_value: false
+
+voice_assistant:
+  on_tts_start:
+    - lambda: |-
+        std::string text = x;
+        auto pos = text.find("[[");
+        if (pos != std::string::npos) text = text.substr(0, pos);
+        while (!text.empty() && isspace((unsigned char) text.back())) text.pop_back();
+        if (text.size() > 300) text = "…" + text.substr(text.size() - 300);
+        // only a question waits for an answer; the assistant also listens again after a plain answer
+        id(last_answer) = text.find('?') != std::string::npos ? text : std::string();
+  on_listening:
+    # listening again right after an answer: the assistant waits for the reply to it
+    - if:
+        condition:
+          lambda: return !id(last_answer).empty();
+        then:
+          - lambda: |-
+              static const char *const hints[] = {"Sag „Ja“ oder „Nein“", "Say “yes” or “no”", "Скажите «да» или «нет»"};
+              lv_label_set_text(id(lbl_hint), hints[id(display_language).active_index().value_or(0) % 3]);
+              lv_label_set_text(id(lbl_question), id(last_answer).c_str());
+              lv_obj_clear_flag(id(confirm_box), LV_OBJ_FLAG_HIDDEN);
+          - script.stop: confirm_hide
+  on_stt_end:
+    - script.execute: confirm_close
+  on_end:
+    - script.execute: confirm_hide
+
+script:
+  # The user answered: back to the clock.
+  - id: confirm_close
+    then:
+      - lambda: id(last_answer).clear();
+      - lvgl.widget.hide: confirm_box
+  # A run ended: after a follow-up the assistant starts listening again at once; when it does not, the
+  # answer needs no reply (or none came): back to the clock.
+  - id: confirm_hide
+    mode: restart
+    then:
+      - delay: 4s
+      - if:
+          condition:
+            not:
+              voice_assistant.is_running:
+          then:
+            - lambda: id(last_answer).clear();
+            - lvgl.widget.hide: confirm_box

@@ -1028,7 +1028,9 @@ script:
               .set_command(media_player::MediaPlayerCommand::MEDIA_PLAYER_COMMAND_REPEAT_ONE)
               .set_announcement(true)
               .perform();
-            id(external_media_player)->set_playlist_delay_ms(speaker::AudioPipelineType::ANNOUNCEMENT, 500);
+            // 3 s of silence between rings: the mic hears the speaker over the
+            // user (no AEC), so the wake word can only stop the ring in a gap.
+            id(external_media_player)->set_playlist_delay_ms(speaker::AudioPipelineType::ANNOUNCEMENT, 3000);
 
   - id: disable_repeat
     then:
@@ -1371,8 +1373,9 @@ switch:
 
   - platform: template
     id: timer_ringing
+    name: Timer ringing      # visible, so the ring can be stopped remotely
+    icon: "mdi:bell-ring"
     optimistic: true
-    internal: true
     restore_mode: ALWAYS_OFF
     on_turn_on:
       - mixer_speaker.apply_ducking:
@@ -1381,7 +1384,7 @@ switch:
           duration: 0.0s
       - script.execute: ring_timer
       - script.execute: control_leds
-      - delay: 15min           # give up if nobody stops it
+      - delay: 1min            # give up if nobody stops it
       - switch.turn_off: timer_ringing
     on_turn_off:
       - script.execute: disable_repeat
