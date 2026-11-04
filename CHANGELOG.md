@@ -2,6 +2,12 @@
 
 ## [Unreleased]
 
+## [1.3.5] - 2026-11-04
+
+### Added
+- **Microphone gain on the settings page**: a slider in dB (0-36, 3 dB steps
+  of the ES7210), the same as the entity Mic gain (ES7210).
+
 ## [1.3.4] - 2026-11-04
 
 ### Fixed

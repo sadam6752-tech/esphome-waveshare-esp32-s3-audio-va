@@ -283,7 +283,8 @@ Other pages fall back to the clock after a minute without a touch.
   **Switch 1** ... **Switch 4**; a touch switches, a lit tile is on. ioBroker
   connects them with its states in both ways (see below).
 - **Settings** (gear): volume, display brightness by day and at night, LED
-  ring brightness, microphone off, night mode, wake sound, language.
+  ring brightness, microphone gain (dB), microphone off, night mode, wake
+  sound, language, Wi-Fi.
 
 Entities of the display:
 
