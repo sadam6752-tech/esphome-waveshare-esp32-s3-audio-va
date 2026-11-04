@@ -3,10 +3,11 @@
 # on the 18-pin LCD FPC of the ESP32-S3-AUDIO-Board. Optional: the core does not need it.
 #
 # Pages (landscape 320x240):
-#   system  <-swipe-  clock  -swipe->  values          settings: the gear on the clock page
+#   system  <-swipe-  clock  -swipe->  values  -swipe->  switches     settings: the gear on the clock page
 # - clock: time, date, alarm, the running timers, the state of the assistant (icon, top right).
 # - system: Wi-Fi, IP, uptime, memory, connection to the assistant.
 # - values: four numbers that ioBroker writes (entities "Value 1".."Value 4"), labels from substitutions.
+# - switches (swipe on from the values): four tiles; a touch switches, ioBroker connects them with its states.
 # - settings: volume, display and ring brightness, microphone, night mode, wake sound, language.
 # Over every page: the conversation (what was heard, the answer, a question waits for a spoken answer),
 # the volume while it changes, and a full-screen "Stop" while a timer or the alarm rings (touch = stop).
@@ -41,6 +42,12 @@ substitutions:
   value_4_label: "Wert 4"
   value_4_unit: ""
   value_4_decimals: "1"
+  # The switches page: what each switch is. ioBroker connects the entities "Switch 1".."Switch 4"
+  # (assistant.0.satellites.<satellite>.controls.switch_1 ...) with its states, both ways.
+  switch_1_label: "Schalter 1"
+  switch_2_label: "Schalter 2"
+  switch_3_label: "Schalter 3"
+  switch_4_label: "Schalter 4"
 
 esphome:
   includes:
@@ -109,6 +116,32 @@ light:
     output: lcd_backlight_pwm
     restore_mode: ALWAYS_ON
     default_transition_length: 500ms
+
+switch:
+  - platform: template
+    id: switch_1
+    name: "Switch 1"
+    icon: "mdi:toggle-switch-outline"
+    optimistic: true
+    restore_mode: RESTORE_DEFAULT_OFF
+  - platform: template
+    id: switch_2
+    name: "Switch 2"
+    icon: "mdi:toggle-switch-outline"
+    optimistic: true
+    restore_mode: RESTORE_DEFAULT_OFF
+  - platform: template
+    id: switch_3
+    name: "Switch 3"
+    icon: "mdi:toggle-switch-outline"
+    optimistic: true
+    restore_mode: RESTORE_DEFAULT_OFF
+  - platform: template
+    id: switch_4
+    name: "Switch 4"
+    icon: "mdi:toggle-switch-outline"
+    optimistic: true
+    restore_mode: RESTORE_DEFAULT_OFF
 
 select:
   # Read by the lambdas only (no on_value: a restored select fires it during setup).
@@ -571,6 +604,11 @@ lvgl:
             id: page_clock
             animation: MOVE_RIGHT
             time: 200ms
+      on_swipe_left:
+        - lvgl.page.show:
+            id: page_switches
+            animation: MOVE_LEFT
+            time: 200ms
       widgets:
         - obj:
             align: TOP_LEFT
@@ -668,6 +706,121 @@ lvgl:
                   text_font: font_value
                   text_color: 0xFFFFFF
                   text: "–"
+
+    # Four switches: a touch switches; on = lit tile.
+    - id: page_switches
+      bg_color: 0x000000
+      scrollable: false
+      on_swipe_right:
+        - lvgl.page.show:
+            id: page_values
+            animation: MOVE_RIGHT
+            time: 200ms
+      widgets:
+        - button:
+            id: tile_sw_1
+            align: TOP_LEFT
+            x: 6
+            y: 8
+            width: 150
+            height: 108
+            bg_color: 0x1E293B
+            radius: 10
+            shadow_width: 0
+            on_click:
+              - switch.toggle: switch_1
+            widgets:
+              - label:
+                  align: TOP_LEFT
+                  width: 128
+                  long_mode: WRAP
+                  text_font: font_text
+                  text_color: 0xFFFFFF
+                  text: "${switch_1_label}"
+              - label:
+                  id: lbl_sw_1
+                  align: BOTTOM_LEFT
+                  text_font: font_small
+                  text_color: 0x94A3B8
+                  text: ""
+        - button:
+            id: tile_sw_2
+            align: TOP_RIGHT
+            x: -6
+            y: 8
+            width: 150
+            height: 108
+            bg_color: 0x1E293B
+            radius: 10
+            shadow_width: 0
+            on_click:
+              - switch.toggle: switch_2
+            widgets:
+              - label:
+                  align: TOP_LEFT
+                  width: 128
+                  long_mode: WRAP
+                  text_font: font_text
+                  text_color: 0xFFFFFF
+                  text: "${switch_2_label}"
+              - label:
+                  id: lbl_sw_2
+                  align: BOTTOM_LEFT
+                  text_font: font_small
+                  text_color: 0x94A3B8
+                  text: ""
+        - button:
+            id: tile_sw_3
+            align: BOTTOM_LEFT
+            x: 6
+            y: -8
+            width: 150
+            height: 108
+            bg_color: 0x1E293B
+            radius: 10
+            shadow_width: 0
+            on_click:
+              - switch.toggle: switch_3
+            widgets:
+              - label:
+                  align: TOP_LEFT
+                  width: 128
+                  long_mode: WRAP
+                  text_font: font_text
+                  text_color: 0xFFFFFF
+                  text: "${switch_3_label}"
+              - label:
+                  id: lbl_sw_3
+                  align: BOTTOM_LEFT
+                  text_font: font_small
+                  text_color: 0x94A3B8
+                  text: ""
+        - button:
+            id: tile_sw_4
+            align: BOTTOM_RIGHT
+            x: -6
+            y: -8
+            width: 150
+            height: 108
+            bg_color: 0x1E293B
+            radius: 10
+            shadow_width: 0
+            on_click:
+              - switch.toggle: switch_4
+            widgets:
+              - label:
+                  align: TOP_LEFT
+                  width: 128
+                  long_mode: WRAP
+                  text_font: font_text
+                  text_color: 0xFFFFFF
+                  text: "${switch_4_label}"
+              - label:
+                  id: lbl_sw_4
+                  align: BOTTOM_LEFT
+                  text_font: font_small
+                  text_color: 0x94A3B8
+                  text: ""
 
     - id: page_settings
       bg_color: 0x000000
@@ -1052,6 +1205,29 @@ interval:
             lv_label_set_text(id(lbl_timer), timers.c_str());
             if (timers.empty()) lv_obj_add_flag(id(lbl_timer), LV_OBJ_FLAG_HIDDEN);
             else lv_obj_clear_flag(id(lbl_timer), LV_OBJ_FLAG_HIDDEN);
+          }
+
+          // the switches page
+          {
+            static int shown_sw = -1;
+            static int shown_sw_lang = -1;
+            switch_::Switch *sws[] = {id(switch_1), id(switch_2), id(switch_3), id(switch_4)};
+            lv_obj_t *tiles[] = {id(tile_sw_1), id(tile_sw_2), id(tile_sw_3), id(tile_sw_4)};
+            lv_obj_t *labels[] = {id(lbl_sw_1), id(lbl_sw_2), id(lbl_sw_3), id(lbl_sw_4)};
+            int bits = 0;
+            for (int i = 0; i < 4; i++) if (sws[i]->state) bits |= 1 << i;
+            if (bits != shown_sw || int(lang) != shown_sw_lang) {
+              shown_sw = bits;
+              shown_sw_lang = lang;
+              static const char *const t_on[] = {"an", "on", "вкл"};
+              static const char *const t_off[] = {"aus", "off", "выкл"};
+              for (int i = 0; i < 4; i++) {
+                bool on = bits & (1 << i);
+                lv_obj_set_style_bg_color(tiles[i], lv_color_hex(on ? 0xB45309 : 0x1E293B), 0);
+                lv_label_set_text(labels[i], on ? t_on[lang] : t_off[lang]);
+                lv_obj_set_style_text_color(labels[i], lv_color_hex(on ? 0xFEF3C7 : 0x94A3B8), 0);
+              }
+            }
           }
 
           // ringing: the stop screen

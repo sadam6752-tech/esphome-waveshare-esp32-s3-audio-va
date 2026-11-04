@@ -2,6 +2,13 @@
 
 ## [Unreleased]
 
+## [1.3.2] - 2026-11-04
+
+### Added
+- **Switches page** (swipe left from the values): four tiles for the
+  entities Switch 1..4; a touch switches, ioBroker connects them with its
+  states in both ways. Labels: substitutions switch_1_label ... switch_4_label.
+
 ## [1.3.1] - 2026-11-04
 
 ### Added

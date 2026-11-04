@@ -274,6 +274,9 @@ Other pages fall back to the clock after a minute without a touch.
   the screen (ready-made firmware only).
 - **Values** (swipe left): four tiles with numbers that something else writes
   into the entities **Value 1** ... **Value 4** (see below).
+- **Switches** (swipe left once more): four tiles for the entities
+  **Switch 1** ... **Switch 4**; a touch switches, a lit tile is on. ioBroker
+  connects them with its states in both ways (see below).
 - **Settings** (gear): volume, display brightness by day and at night, LED
   ring brightness, microphone off, night mode, wake sound, language.
 
@@ -312,6 +315,26 @@ for (const [slot, source] of Object.entries(values)) {
 ```
 
 A value of -999999 (the start value) is shown as "–".
+
+**Switches from ioBroker.** The same in both ways: a touch on a tile switches
+the state in ioBroker, and a change of the state lights or darkens the tile.
+Labels are the substitutions `switch_1_label` ... `switch_4_label`.
+
+```js
+// ioBroker JavaScript: connect the switches page of the satellite "Gast" with states
+const target = 'assistant.0.satellites.Gast.controls.';
+const switches = {
+    switch_1: 'hm-rpc.0.ABC123.1.STATE', // your states
+    switch_2: 'zigbee.0.lamp.state',
+};
+for (const [slot, source] of Object.entries(switches)) {
+    // a touch on the display (the device reports its new state, ack true)
+    on({ id: target + slot, change: 'ne', ack: true }, obj => setState(source, !!obj.state.val));
+    // the state changed elsewhere: show it (ack false = a command to the device)
+    on({ id: source, change: 'ne' }, obj => setState(target + slot, !!obj.state.val));
+    getState(source, (err, state) => state && setState(target + slot, !!state.val));
+}
+```
 
 **Which touch controller?** The display exists in two versions. **Rev 1.1**
 (V2, printed on the back) has a **CST3530** at I2C 0x58, which ESPHome does
