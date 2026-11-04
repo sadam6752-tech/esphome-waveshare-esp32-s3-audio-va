@@ -62,9 +62,14 @@ jobs:
 
       - name: Collect
         run: |
+          # wherever ESPHome put the build (one variant per runner)
+          factory="$(find . -name firmware.factory.bin -not -path './out/*' | head -1)"
+          ota="$(find . -name firmware.ota.bin -not -path './out/*' | head -1)"
+          echo "factory: $factory"; echo "ota: $ota"
+          test -n "$factory" && test -n "$ota"
           mkdir -p out/${{ matrix.variant }}
-          cp "$(find build/${{ matrix.variant }} -name firmware.factory.bin | head -1)" out/${{ matrix.variant }}/firmware.factory.bin
-          cp "$(find build/${{ matrix.variant }} -name firmware.ota.bin | head -1)" out/${{ matrix.variant }}/firmware.ota.bin
+          cp "$factory" out/${{ matrix.variant }}/firmware.factory.bin
+          cp "$ota" out/${{ matrix.variant }}/firmware.ota.bin
           ls -l out/${{ matrix.variant }}
 
       - uses: actions/upload-artifact@v4
