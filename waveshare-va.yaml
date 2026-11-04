@@ -23,7 +23,7 @@ substitutions:
   # https://github.com/nayarsystems/posix_tz_db/blob/master/zones.csv - DST is
   # then handled automatically. HA can also push a zone via the set_time_zone
   # action, which overrides this and is remembered across reboots.
-  posix_timezone: "CET-1CEST,M3.5.0,M10.5.0/3"   # Europe/Warsaw
+  posix_timezone: "CET-1CEST,M3.5.0,M10.5.0/3"   # Europe/Berlin
 
   # Onboard amplifier volume clamps. The little speaker distorts near the top,
   # so the media player is limited to this window (0.0 - 1.0).
@@ -41,15 +41,38 @@ substitutions:
   # Mic gain, LED brightness, wake-word sensitivity and the alarm are all
   # exposed as entities in Home Assistant - no need to reflash to change them.
 
+# The core comes from the local clone (base/core.yaml), not from GitHub: it has
+# our own changes to the timer ring (3 s gap, visible switch, 1 min auto-stop).
+# Upstream changes: git pull, then build again.
 packages:
-  core:
-    url: https://github.com/MichalZaniewicz/esphome-waveshare-esp32-s3-audio-va
-    ref: main
-    files:
-      - base/core.yaml
-    refresh: 0s      # fetch the latest main on every build
+  core: !include base/core.yaml
+  # Waveshare 2.8inch Capacitive Touch LCD (Rev 1.1) on the LCD FPC: clock and date
+  display: !include base/display.yaml
 
 # Wi-Fi and the API key come from your local secrets.yaml.
+
+# Windows without long path support: the ESP-IDF build tree under this folder
+# gets too deep, so build in a short folder.
+esphome:
+  build_path: C:/ESPHome/build/waveshare-va
+
+# Own wake word "ioBroker", built into the firmware: the core's models do not
+# take models sent over the API. It is added to the core's list; which ones
+# listen is chosen in ioBroker.assistant (Satellites tab).
+micro_wake_word:
+  models:
+    - model: wakewords/iobroker.json
+      id: iobroker
+
+# No Home Assistant here: the device is driven by ioBroker.assistant, which does
+# not answer the time request of the native API. Take the clock from NTP instead
+# (same id, so the alarm and the clock entities of the core keep working).
+time:
+  - id: !extend rtc
+    platform: sntp
+    servers:
+      - 0.pool.ntp.org
+      - 1.pool.ntp.org
 
 # Optional: static IP. Anything you add here is merged into the core config, so
 # you only list the extra keys. With manual_ip set, OTA and logs use this IP
