@@ -322,9 +322,18 @@ for (const [slot, source] of Object.entries(values)) {
 
 A value of -999999 (the start value) is shown as "–".
 
+**Labels from ioBroker.** With ioBroker.assistant 1.4.8 or newer the labels,
+units and decimals are entities too: **Value 1 label**, **Value 1 unit**,
+**Value 1 decimals** ... and **Switch 1 label** ... (states
+`assistant.0.satellites.<satellite>.controls.value_1_label` and so on).
+Writing them renames the tiles at once, without a new firmware; the device
+keeps them. The substitutions (`value_1_label`, `switch_1_label`, ...) are only
+the values at the first start.
+
 **Switches from ioBroker.** The same in both ways: a touch on a tile switches
 the state in ioBroker, and a change of the state lights or darkens the tile.
-Labels are the substitutions `switch_1_label` ... `switch_4_label`.
+Labels: the entities **Switch 1 label** ... (see above), first values from the
+substitutions `switch_1_label` ... `switch_4_label`.
 
 ```js
 // ioBroker JavaScript: connect the switches page of the satellite "Gast" with states

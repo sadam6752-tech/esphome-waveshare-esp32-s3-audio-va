@@ -2,6 +2,15 @@
 
 ## [Unreleased]
 
+## [1.3.8] - 2026-11-05
+
+### Added
+- **Labels of the values and switches pages from ioBroker.** Text entities
+  Value 1..4 label / unit and Switch 1..4 label, numbers Value 1..4 decimals
+  (ioBroker.assistant 1.4.8+ mirrors them as writable states). The ready-made
+  firmware no longer shows only "Wert 1" / "Schalter 1"; the substitutions are
+  the first values.
+
 ## [1.3.7] - 2026-11-05
 
 ### Fixed

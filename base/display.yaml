@@ -28,7 +28,8 @@ substitutions:
   # Language of the display at the first start (Deutsch, English, Русский); later the select
   # "Display language" (the satellite does not learn the language of the assistant).
   display_language: Deutsch
-  # The values page: what each value is. ioBroker writes the numbers into the entities "Value 1".."Value 4"
+  # The values page: what each value is (first values; later the entities "Value 1 label", "Value 1 unit",
+  # "Value 1 decimals" ... set from ioBroker). ioBroker writes the numbers into the entities "Value 1".."Value 4"
   # (assistant.0.satellites.<satellite>.controls.value_1 ...).
   value_1_label: "Wert 1"
   value_1_unit: ""
@@ -42,7 +43,8 @@ substitutions:
   value_4_label: "Wert 4"
   value_4_unit: ""
   value_4_decimals: "1"
-  # The switches page: what each switch is. ioBroker connects the entities "Switch 1".."Switch 4"
+  # The switches page: what each switch is (first values; later "Switch 1 label" ... from ioBroker).
+  # ioBroker connects the entities "Switch 1".."Switch 4"
   # (assistant.0.satellites.<satellite>.controls.switch_1 ...) with its states, both ways.
   switch_1_label: "Schalter 1"
   switch_2_label: "Schalter 2"
@@ -185,6 +187,130 @@ switch:
     optimistic: true
     restore_mode: RESTORE_DEFAULT_OFF
 
+# Labels, units and decimals of the values and switches pages. The substitutions are only the first values: ioBroker
+# changes them without a new firmware (ioBroker.assistant 1.4.8+ mirrors text entities as writable states).
+text:
+  - platform: template
+    id: value_1_label
+    name: "Value 1 label"
+    icon: "mdi:label-outline"
+    entity_category: config
+    mode: text
+    max_length: 24
+    optimistic: true
+    restore_value: true
+    initial_value: "${value_1_label}"
+  - platform: template
+    id: value_1_unit
+    name: "Value 1 unit"
+    icon: "mdi:label-outline"
+    entity_category: config
+    mode: text
+    max_length: 8
+    optimistic: true
+    restore_value: true
+    initial_value: "${value_1_unit}"
+  - platform: template
+    id: value_2_label
+    name: "Value 2 label"
+    icon: "mdi:label-outline"
+    entity_category: config
+    mode: text
+    max_length: 24
+    optimistic: true
+    restore_value: true
+    initial_value: "${value_2_label}"
+  - platform: template
+    id: value_2_unit
+    name: "Value 2 unit"
+    icon: "mdi:label-outline"
+    entity_category: config
+    mode: text
+    max_length: 8
+    optimistic: true
+    restore_value: true
+    initial_value: "${value_2_unit}"
+  - platform: template
+    id: value_3_label
+    name: "Value 3 label"
+    icon: "mdi:label-outline"
+    entity_category: config
+    mode: text
+    max_length: 24
+    optimistic: true
+    restore_value: true
+    initial_value: "${value_3_label}"
+  - platform: template
+    id: value_3_unit
+    name: "Value 3 unit"
+    icon: "mdi:label-outline"
+    entity_category: config
+    mode: text
+    max_length: 8
+    optimistic: true
+    restore_value: true
+    initial_value: "${value_3_unit}"
+  - platform: template
+    id: value_4_label
+    name: "Value 4 label"
+    icon: "mdi:label-outline"
+    entity_category: config
+    mode: text
+    max_length: 24
+    optimistic: true
+    restore_value: true
+    initial_value: "${value_4_label}"
+  - platform: template
+    id: value_4_unit
+    name: "Value 4 unit"
+    icon: "mdi:label-outline"
+    entity_category: config
+    mode: text
+    max_length: 8
+    optimistic: true
+    restore_value: true
+    initial_value: "${value_4_unit}"
+  - platform: template
+    id: switch_1_label
+    name: "Switch 1 label"
+    icon: "mdi:label-outline"
+    entity_category: config
+    mode: text
+    max_length: 24
+    optimistic: true
+    restore_value: true
+    initial_value: "${switch_1_label}"
+  - platform: template
+    id: switch_2_label
+    name: "Switch 2 label"
+    icon: "mdi:label-outline"
+    entity_category: config
+    mode: text
+    max_length: 24
+    optimistic: true
+    restore_value: true
+    initial_value: "${switch_2_label}"
+  - platform: template
+    id: switch_3_label
+    name: "Switch 3 label"
+    icon: "mdi:label-outline"
+    entity_category: config
+    mode: text
+    max_length: 24
+    optimistic: true
+    restore_value: true
+    initial_value: "${switch_3_label}"
+  - platform: template
+    id: switch_4_label
+    name: "Switch 4 label"
+    icon: "mdi:label-outline"
+    entity_category: config
+    mode: text
+    max_length: 24
+    optimistic: true
+    restore_value: true
+    initial_value: "${switch_4_label}"
+
 select:
   # Read by the lambdas only (no on_value: a restored select fires it during setup).
   - platform: template
@@ -198,6 +324,54 @@ select:
     options: [Deutsch, English, Русский]
 
 number:
+  - platform: template
+    id: value_1_decimals
+    name: "Value 1 decimals"
+    icon: "mdi:decimal"
+    entity_category: config
+    optimistic: true
+    restore_value: true
+    initial_value: ${value_1_decimals}
+    min_value: 0
+    max_value: 3
+    step: 1
+    mode: box
+  - platform: template
+    id: value_2_decimals
+    name: "Value 2 decimals"
+    icon: "mdi:decimal"
+    entity_category: config
+    optimistic: true
+    restore_value: true
+    initial_value: ${value_2_decimals}
+    min_value: 0
+    max_value: 3
+    step: 1
+    mode: box
+  - platform: template
+    id: value_3_decimals
+    name: "Value 3 decimals"
+    icon: "mdi:decimal"
+    entity_category: config
+    optimistic: true
+    restore_value: true
+    initial_value: ${value_3_decimals}
+    min_value: 0
+    max_value: 3
+    step: 1
+    mode: box
+  - platform: template
+    id: value_4_decimals
+    name: "Value 4 decimals"
+    icon: "mdi:decimal"
+    entity_category: config
+    optimistic: true
+    restore_value: true
+    initial_value: ${value_4_decimals}
+    min_value: 0
+    max_value: 3
+    step: 1
+    mode: box
   - platform: template
     id: lcd_day_brightness
     name: "Display brightness"
@@ -788,6 +962,7 @@ lvgl:
                   width: 128
                   text_font: font_small
                   text_color: 0x94A3B8
+                  id: lbl_value_1_name
                   text: "${value_1_label}"
               - label:
                   id: lbl_value_1
@@ -812,6 +987,7 @@ lvgl:
                   width: 128
                   text_font: font_small
                   text_color: 0x94A3B8
+                  id: lbl_value_2_name
                   text: "${value_2_label}"
               - label:
                   id: lbl_value_2
@@ -836,6 +1012,7 @@ lvgl:
                   width: 128
                   text_font: font_small
                   text_color: 0x94A3B8
+                  id: lbl_value_3_name
                   text: "${value_3_label}"
               - label:
                   id: lbl_value_3
@@ -860,6 +1037,7 @@ lvgl:
                   width: 128
                   text_font: font_small
                   text_color: 0x94A3B8
+                  id: lbl_value_4_name
                   text: "${value_4_label}"
               - label:
                   id: lbl_value_4
@@ -897,6 +1075,7 @@ lvgl:
                   long_mode: WRAP
                   text_font: font_text
                   text_color: 0xFFFFFF
+                  id: lbl_sw_1_name
                   text: "${switch_1_label}"
               - label:
                   id: lbl_sw_1
@@ -923,6 +1102,7 @@ lvgl:
                   long_mode: WRAP
                   text_font: font_text
                   text_color: 0xFFFFFF
+                  id: lbl_sw_2_name
                   text: "${switch_2_label}"
               - label:
                   id: lbl_sw_2
@@ -949,6 +1129,7 @@ lvgl:
                   long_mode: WRAP
                   text_font: font_text
                   text_color: 0xFFFFFF
+                  id: lbl_sw_3_name
                   text: "${switch_3_label}"
               - label:
                   id: lbl_sw_3
@@ -975,6 +1156,7 @@ lvgl:
                   long_mode: WRAP
                   text_font: font_text
                   text_color: 0xFFFFFF
+                  id: lbl_sw_4_name
                   text: "${switch_4_label}"
               - label:
                   id: lbl_sw_4
@@ -1708,10 +1890,23 @@ interval:
             else snprintf(buf, sizeof(buf), "%.*f%s%s", decimals, v, unit[0] ? " " : "", unit);
             lv_label_set_text(label, buf);
           };
-          show(id(lbl_value_1), id(value_1).state, ${value_1_decimals}, "${value_1_unit}");
-          show(id(lbl_value_2), id(value_2).state, ${value_2_decimals}, "${value_2_unit}");
-          show(id(lbl_value_3), id(value_3).state, ${value_3_decimals}, "${value_3_unit}");
-          show(id(lbl_value_4), id(value_4).state, ${value_4_decimals}, "${value_4_unit}");
+          auto decimals = [](float d) { return std::isnan(d) ? 1 : std::max(0, std::min(3, int(d + 0.5f))); };
+          show(id(lbl_value_1), id(value_1).state, decimals(id(value_1_decimals).state), id(value_1_unit).state.c_str());
+          show(id(lbl_value_2), id(value_2).state, decimals(id(value_2_decimals).state), id(value_2_unit).state.c_str());
+          show(id(lbl_value_3), id(value_3).state, decimals(id(value_3_decimals).state), id(value_3_unit).state.c_str());
+          show(id(lbl_value_4), id(value_4).state, decimals(id(value_4_decimals).state), id(value_4_unit).state.c_str());
+          // the labels, when ioBroker changed them
+          auto label = [](lv_obj_t *obj, const std::string &text) {
+            if (text != lv_label_get_text(obj)) lv_label_set_text(obj, text.c_str());
+          };
+          label(id(lbl_value_1_name), id(value_1_label).state);
+          label(id(lbl_value_2_name), id(value_2_label).state);
+          label(id(lbl_value_3_name), id(value_3_label).state);
+          label(id(lbl_value_4_name), id(value_4_label).state);
+          label(id(lbl_sw_1_name), id(switch_1_label).state);
+          label(id(lbl_sw_2_name), id(switch_2_label).state);
+          label(id(lbl_sw_3_name), id(switch_3_label).state);
+          label(id(lbl_sw_4_name), id(switch_4_label).state);
       # the system page, while it is shown
       - if:
           condition:
