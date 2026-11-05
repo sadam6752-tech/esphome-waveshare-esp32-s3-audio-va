@@ -1,406 +1,202 @@
-![ESPHome and Home Assistant voice assistant on the Waveshare ESP32-S3-AUDIO-Board](docs/hero.jpg)
+![The Waveshare ESP32-S3-AUDIO-Board as a voice satellite](docs/hero.jpg)
 
-# ESPHome Voice Assistant for the Waveshare ESP32-S3-AUDIO-Board
+# Waveshare ESP32-S3-AUDIO voice satellite for ioBroker
 
-A **Home Assistant voice satellite** running on the
-[Waveshare ESP32-S3-AUDIO-Board](https://www.waveshare.com/esp32-s3-audio-board.htm),
-the little AI smart-speaker devkit with a dual-mic array, an ES8311 codec, three
-buttons and a 7-LED RGB ring. Pure ESPHome, no custom C firmware: an always-on
-core you pull as a package, plus one thin config file you actually edit.
+A voice satellite for **[ioBroker.assistant](https://github.com/ioBroker/ioBroker.assistant)** on the
+[Waveshare ESP32-S3-AUDIO-Board](https://www.waveshare.com/esp32-s3-audio-board.htm): wake word on the board,
+speaker, LED ring, three buttons and, optionally, the **Waveshare 2.8inch Capacitive Touch LCD** with clock,
+timers, values and switches from ioBroker.
 
-> [!TIP]
-> ⭐ **Enjoying this project?** Every star is real motivation to keep it going.
->
-> ☕ Want to say thanks another way? You can [buy me a coffee](https://buymeacoffee.com/zanula).
-
-<!-- The badges live OUTSIDE the alert on purpose: Home Assistant rewrites a
-GitHub alert into <ha-alert> and drops every child whose textContent is empty,
-which silently removes any <img> placed inside it. -->
-
-[![Star this repo](https://img.shields.io/github/stars/MichalZaniewicz/esphome-waveshare-esp32-s3-audio-va?style=for-the-badge&logo=github&label=STAR%20THIS%20REPO&labelColor=555555&color=ffc107)](https://github.com/MichalZaniewicz/esphome-waveshare-esp32-s3-audio-va) [![Buy me a coffee](https://img.shields.io/badge/BUY%20ME%20A%20COFFEE-FFDD00?style=for-the-badge&logo=buymeacoffee&logoColor=black)](https://buymeacoffee.com/zanula)
-
-![Trailer: the voice assistant, the LED ring animations and the Home Assistant controls](docs/trailer.webp)
-
-> **Status: stable (v1.2.0).** Wake word, STT/TTS, clean playback and the LED
-> ring are confirmed on-device. Full docs are in the
-> [Wiki](https://github.com/MichalZaniewicz/esphome-waveshare-esp32-s3-audio-va/wiki);
-> the release history is in [CHANGELOG.md](CHANGELOG.md).
+**Ready-made firmware: nothing to build.** Flash it from the browser, set up Wi-Fi on the screen or the phone,
+updates come over the air.
 
 ```
-You  ──▶  Waveshare ESP32-S3  ──▶  Home Assistant Assist
-         (wake word + audio)      (STT / LLM / TTS)
+You  ──▶  Waveshare board  ──▶  ioBroker.assistant  ──▶  pi-agent / cloud model
+          (wake word, audio)    (speech recognition, TTS, rules)
 ```
+
+This is a fork of [MichalZaniewicz/esphome-waveshare-esp32-s3-audio-va](https://github.com/MichalZaniewicz/esphome-waveshare-esp32-s3-audio-va)
+(a Home Assistant satellite). The audio core comes from there; this fork adds the touch display, the ready-made
+firmware and everything for ioBroker.
+
+## Install
+
+You need the board, a USB-C cable and Chrome or Edge on a computer.
+
+1. Open the install page **https://sadam6752-tech.github.io/esphome-waveshare-esp32-s3-audio-va/** and press
+   **Install** - *with display* or *without display*. If no port shows up, hold **BOOT** while plugging in the cable.
+   Tick **Erase device** when you come from another firmware.
+2. Set up **Wi-Fi**, one of:
+   - right after flashing, on the install page (it offers it by itself);
+   - on the display: it opens the Wi-Fi page by itself when there is no network (later: gear > **WLAN**) -
+     *Suchen*, pick the network, type the password;
+   - with a phone: without a network the board opens the access point **Waveshare-VA Setup**; join it and pick
+     your network.
+3. In **ioBroker.assistant**, tab *Satellites*: add the board (its IP, port 6053) and give it a room. Its settings
+   then appear under `assistant.0.satellites.<room>.controls.*`.
+
+The board's name gets the end of its MAC address (`waveshare-va-eb1614`), so several boards do not clash.
+
+## Updates
+
+New versions are published here (GitHub Releases); the board looks for them at start and every 6 hours.
+
+- **On the display:** swipe to *System* > **FW Update** > **Ja**. A blue screen shows the progress - do not unplug
+  the board until it restarts.
+- **From ioBroker:** `controls.firmware.check` looks now, `controls.firmware.install` installs what
+  `controls.firmware.latestVersion` shows.
+
+Settings (labels, brightness, microphone gain ...) stay on the board across updates.
+
+## Requirements
+
+| | Version | For |
+|---|---|---|
+| ioBroker.assistant | **1.4.9** or newer | Yes/No buttons, reminders as timers on the satellite; 1.4.8 for labels from ioBroker, 1.4.7 for the display language |
+| ioBroker.pi-agent | 0.9.5 or newer (optional) | reminders asked on the satellite come back there |
+| Display | Waveshare 2.8inch Capacitive Touch LCD, **Rev 1.1** | the touch controller CST3530 (see [the display](#the-touch-display)) |
 
 ## What it does
 
-![Home Assistant entities, the LED ring animation picker, the media player and the wake-word controls](docs/features.jpg)
+- **Voice:** wake word on the board - **"ioBroker"** (built in), Alexa, Okay Nabu, Hey Jarvis, Hey Mycroft; which
+  ones listen is chosen in ioBroker.assistant. Speech recognition, the answer and TTS run in ioBroker.assistant.
+- **LED ring:** listening, thinking, answering, timer, ringing, no Wi-Fi, no connection - each its own color and
+  effect; brightness and effects are settings.
+- **Timers:** set by voice (or by pi-agent as a reminder), countdown on the ring and the display, then it rings.
+  Stop it with the wake word, the middle button or a touch on the screen; it stops by itself after a minute.
+- **Buttons:** volume down, play/pause, volume up; while it rings, the middle one stops it.
+- **Night mode:** the ring and the display dim, no wake beep.
+- **Everything is a setting in ioBroker**: microphone gain, wake word sensitivity, LED brightness, night mode,
+  display ... under `assistant.0.satellites.<room>.controls.*`.
 
-- **Voice assistant**: on-device wake word via `micro_wake_word` (Alexa, Okay
-  Nabu, Hey Jarvis or Hey Mycroft, picked in Home Assistant), the full Home
-  Assistant Assist pipeline (STT / LLM / TTS), a wake beep and music ducking
-  while it listens.
-- **Simultaneous music and announcements**: a mixer speaker blends the media and
-  announcement pipelines, so a doorbell announcement ducks the music instead of
-  fighting it. Both are exposed to Music Assistant.
-- **LED ring**: one state machine drives it. Boot, no-Wi-Fi, no-HA, listening,
-  thinking, replying, timer counting, ringing, volume changed - each a distinct
-  colour/effect. Brightness and the animation for the listening / thinking /
-  replying phases are pickable from HA: solid plus 14 animations - pulses,
-  breathe, wipe, scan, spinner, comet, twinkle, fireworks, fire, rainbows.
-- **Timers**: set by voice, with an on-ring countdown and a "Next timer" sensor
-  in HA. A ringing timer or alarm is silenced by saying the wake word or by
-  pressing Play/Pause. (A daily-alarm engine is present but its entities are
-  hidden by default.)
-- **Buttons**: the three onboard keys do volume down, play-pause, volume up.
-  While a timer or alarm is ringing, Play/Pause silences it instead.
-- **Boot chime**: a short "ready" sound once the device connects to HA
-  (toggleable, and it also settles the amp so the ring boots silent).
-- **Night mode**: one switch dims the ring to its own brightness and skips the
-  wake beep and boot chime. Drive it from any Home Assistant automation.
-- **Touch display (optional)**: the Waveshare 2.8inch Capacitive Touch LCD on
-  the LCD connector shows the clock and date, the running timer and a question
-  of the assistant; a touch stops a ringing timer or alarm. See
-  [Touch display](#touch-display-optional).
-- **Tunable live from HA**: the wake word, microphone mute, ES7210 mic gain, LED
-  brightness and wake-word sensitivity are all entities, so there's no
-  reflashing to tune it.
+## The touch display
 
-https://github.com/user-attachments/assets/3236cd4f-7184-4eee-a16a-0db6fe1603a3
+The **Waveshare 2.8inch Capacitive Touch LCD** (240x320, ST7789) goes on the 18-pin LCD connector of the board -
+plug the ribbon in with the board unpowered. Take the firmware *with display*. **Rev 1.1** (printed on the back)
+has the touch controller CST3530, for which this firmware brings its own driver; the older version (CST328) is not
+tested.
 
-## Ready-made firmware
-
-No ESPHome build needed: open the install page
-**https://sadam6752-tech.github.io/esphome-waveshare-esp32-s3-audio-va/**
-in Chrome or Edge, connect the board by USB-C and press **Install** - with or
-without the touch display. Then set up Wi-Fi: on the page right after
-flashing (Improv), on the display (Settings > Wi-Fi: scan, pick, password on
-the keyboard), or through the access point **Waveshare-VA Setup** that the
-board opens when no network is reachable. Updates arrive over the air as the
-**Firmware** update entity (checked every 6 hours).
-
-The ready-made firmware is made for ioBroker.assistant: the clock comes from
-NTP, the wake word "ioBroker" is built in, the time zone is Germany (change
-it with the `set_time_zone` action) and the device name gets the end of the
-MAC address, so several boards do not clash. It is built by
-`.github/workflows/release.yml` from `release-display.yaml` and
-`release-core.yaml` on every tag `v*`.
-
-## Quick start
-
-> Requires **ESPHome 2026.8.0+**.
-
-1. Copy `secrets.example.yaml` to `secrets.yaml` and fill in your Wi-Fi. The
-   native API is unencrypted by default; enable encryption in `base/core.yaml`
-   if you want it (see the commented block there).
-2. Copy **`waveshare-va.yaml`** next to it and edit the `substitutions:` at the
-   top (device name, timezone, volume limits). That thin file is the only
-   firmware file you keep. The core is **pulled from GitHub at compile time**,
-   see its `packages:` block.
-3. **First flash over USB**, then updates go wireless:
-   ```
-   esphome run waveshare-va.yaml
-   ```
-   Or drop both files into the ESPHome dashboard's `/config/esphome/` and hit
-   Install.
-4. In Home Assistant: the new ESPHome device appears, open **Configure** and
-   assign an Assist pipeline.
-5. Say "Alexa". The ring should go violet. To use another wake word, change
-   **Wake word** on the device page (see [Wake words](#wake-words)).
-
-The example config tracks `main` with `refresh: 0s`, so every build fetches the
-latest version. To update, just run `esphome run waveshare-va.yaml` (or
-**Install** in the dashboard). After upgrading ESPHome itself, run
-`esphome clean waveshare-va.yaml` first if the build fails.
-
-## Documentation
-
-The [Wiki](https://github.com/MichalZaniewicz/esphome-waveshare-esp32-s3-audio-va/wiki)
-has the full guide:
-
-- **[Installation](https://github.com/MichalZaniewicz/esphome-waveshare-esp32-s3-audio-va/wiki/Installation)**: first flash, Home Assistant setup, updating.
-- **[Configuration](https://github.com/MichalZaniewicz/esphome-waveshare-esp32-s3-audio-va/wiki/Configuration)**: every substitution and every Home Assistant entity.
-- **[Audio architecture](https://github.com/MichalZaniewicz/esphome-waveshare-esp32-s3-audio-va/wiki/Audio-architecture)**: the shared-I2S two-bus design, in depth.
-- **[LED ring](https://github.com/MichalZaniewicz/esphome-waveshare-esp32-s3-audio-va/wiki/LED-ring)**: the state machine and every ring effect.
-- **[Hardware](https://github.com/MichalZaniewicz/esphome-waveshare-esp32-s3-audio-va/wiki/Hardware)**: pinout, I2C map, and sourced gotchas.
-- **[Troubleshooting](https://github.com/MichalZaniewicz/esphome-waveshare-esp32-s3-audio-va/wiki/Troubleshooting)** and **[FAQ](https://github.com/MichalZaniewicz/esphome-waveshare-esp32-s3-audio-va/wiki/FAQ)**.
-
-## How the shared I2S bus is handled
-
-The board wires the **ES8311 (DAC) and the ES7210 (ADC) to the same BCLK/LRCLK
-pins**, and only one device can drive those clocks. ESPHome also cannot run a
-single I2S bus full-duplex: a microphone and a speaker on one bus each try to
-init the port, and the second fails with "Parent bus is busy".
-
-The layout that works, all on **stock ESPHome components**:
-
-- **Two I2S buses** (two ports) over the shared pins. The **mic bus is the I2S
-  master**: it is always capturing for the wake word, so it drives BCLK/LRCLK/MCLK
-  continuously. The **speaker bus is a slave** that reads the mic's clock, so it
-  never needs a port of its own to master.
-- The ES8311 and ES7210 are stock and slave to the mic's clock.
-- The mic is pinned to **16-bit** (the i2s_audio default is 32-bit); since the
-  mic is master it sets the frame's slot width, and a 32-bit frame against the
-  16-bit DAC comes out as noise.
-
-This gives simultaneous capture + playback with no custom component. The
-annotated config is in the audio section of `base/core.yaml`.
-
-## Repository layout
+### Pages
 
 ```
-waveshare-va.yaml          # YOUR config: copy + edit this (pulls the rest from GitHub)
-secrets.example.yaml       # copy to secrets.yaml
-base/
-  core.yaml                # the always-on core, pulled as a remote package
-  display.yaml             # optional: the 2.8inch touch display
-  release.yaml             # shared part of the ready-made firmware
-release-display.yaml       # ready-made firmware with the display
-release-core.yaml          # ready-made firmware without a display
-install/index.html         # install page (ESP Web Tools) on GitHub Pages
-components/
-  cst3530/                 # touch controller of the display (Rev 1.1), not in ESPHome
-ci/
-  build.yaml               # CI build target: compiles the core from the working tree
-.github/workflows/
-  build.yml                # compiles the firmware on every push and pull request
-docs/
-  HARDWARE.md              # pinout, I2C map, gotchas
-scripts/
-  validate.py              # offline YAML check (syntax, substitutions, duplicate ids)
-  esplog.py                # stream device logs over the native API
-skill/
-  waveshare-esp32-s3-audio/  # Claude Code skill: pinout + hard-won gotchas
+System  ◀─ swipe ─  Clock  ─ swipe ▶  Values  ─ swipe ▶  Switches        Settings: the gear on the clock
 ```
 
-## Configuration
+- **Clock:** time, date, the alarm when it is on, the running timers at the bottom (one with its name, several as
+  `T1 4:59  T2 12:00`).
+- **State of the assistant** (top right, on every page): blue microphone = listens, amber dots = thinks, green
+  speaker = answers, red = no Wi-Fi / no connection / error, grey crossed-out microphone = microphone off.
+- **Conversation:** what the board heard and the answer. A question of the assistant ("testLamp ausschalten? Sag
+  ja oder nein.") gets **Ja / Nein** buttons - a touch answers like the spoken word.
+- **Volume:** a bar while the volume changes.
+- **Ringing:** an orange **Stopp** over everything; a touch anywhere stops it.
+- **System:** firmware version, Wi-Fi and signal, IP, uptime, memory, connection to the assistant; **FW Update**
+  and **Neustart** (restart, asks first).
+- **Values:** four tiles with numbers from ioBroker.
+- **Switches:** four tiles that switch states in ioBroker; a lit tile is on.
+- **Settings:** volume, display brightness by day and at night, LED ring, microphone gain (dB), microphone off,
+  night mode, wake sound, language, Wi-Fi.
 
-Everything worth changing day to day is a Home Assistant entity, not a config
-edit: mic gain, LED brightness, the ring animation per assistant phase
-(Listening / Thinking / Replying effect), the wake word and its sensitivity,
-night mode, wake sound, boot sound, microphone mute.
+Other pages go back to the clock after a minute without a touch. In night mode the display goes dark (or dims);
+a touch lights it for 10 seconds, and it lights by itself while you talk or a timer rings.
 
-What lives in `waveshare-va.yaml`:
+### Settings of the display in ioBroker
 
-| Substitution | Default | What it does |
-|---|---|---|
-| `name` / `friendly_name` | `waveshare-va` / `Waveshare Voice` | Device name. Changing `name` re-creates every entity in HA. |
-| `posix_timezone` | `CET-1CEST,...` | Clock zone in POSIX form (the device has no IANA database). DST automatic. |
-| `volume_min` / `volume_max` | `0.4` / `0.8` | Media player clamps, because the onboard amp distorts near the top. |
-| `hidden_ssid` | `false` | `true` enables `fast_connect` for a hidden SSID. |
-| `boot_sound_file` | repo `startup.mp3` | The connect-to-HA chime. Any URL or local MP3/FLAC/WAV. |
+All under `assistant.0.satellites.<room>.controls.`:
 
-Pins and the audio format are substitutions too (in `base/core.yaml`), but you
-should not need them unless you are porting to another board.
+| State | What it does |
+|---|---|
+| `display_language` | Deutsch, English, Русский - the assistant sets it to its voice language |
+| `display_brightness` / `display_night_brightness` | backlight by day / in night mode in % (0 = off) |
+| `value_1` ... `value_4` | the numbers of the values page |
+| `value_1_label`, `value_1_unit`, `value_1_decimals` ... | label, unit and decimals of each value tile |
+| `switch_1` ... `switch_4` | the switches page (true/false, both ways) |
+| `switch_1_label` ... | label of each switch tile |
+| `confirm_answer` | the last Ja/Nein touch (`yes` / `no`), read only |
+| `reboot` | `true` restarts the board |
 
-### Wake words
+### Values and switches from ioBroker
 
-The firmware ships four wake word models: `alexa` (the default), `okay_nabu`,
-`hey_jarvis` and `hey_mycroft`. Pick the active one with the **Wake
-word** select on the device page in Home Assistant; the choice is stored on the
-device and survives reboots and updates.
-
-If several satellites share one Home Assistant instance and can hear the same
-voice, give each a different wake word. Home Assistant ignores a wake word it
-already heard within the last two seconds, on any device, so two satellites on
-the same word cancel each other out (the second one beeps and does nothing).
-
-### Night mode
-
-The **Night mode** switch dims the ring to **Night LED Ring Brightness** and
-skips the wake beep and the boot chime. Replies, timers and the alarm still
-play at the normal volume. It is a plain switch, so any automation can drive it:
-
-```yaml
-automation:
-  - alias: Voice satellite night mode
-    triggers:
-      - trigger: sun
-        event: sunset
-        id: "on"
-      - trigger: sun
-        event: sunrise
-        id: "off"
-    actions:
-      - action: switch.turn_{{ trigger.id }}
-        target:
-          entity_id: switch.waveshare_va_night_mode
-```
-
-### Touch display (optional)
-
-The board takes the **Waveshare 2.8inch Capacitive Touch LCD** (240x320,
-ST7789) on its 18-pin LCD connector. Plug the ribbon in with the board
-unpowered. Without a display nothing changes: the display lives in its own
-package, `base/display.yaml`, and the core does not need it.
-
-To use it, build from a local clone of this repository and add the package to
-your `waveshare-va.yaml`:
-
-```yaml
-packages:
-  core: !include base/core.yaml
-  display: !include base/display.yaml
-```
-
-`display.yaml` loads the touch driver from the local `components/` folder, so
-it is not pulled as a remote package.
-
-What it shows (landscape, 320x240). Swipe from the clock to the right for the
-system page, to the left for the values page; the gear opens the settings.
-Other pages fall back to the clock after a minute without a touch.
-
-- **Clock**: the time, the date without the year (a German weekday and month
-  with the year do not fit), the alarm of the core when it is on, and the
-  running timers at the bottom: one with its name, several as `T1 4:59  T2 12:00`.
-- **State of the assistant**: a small icon in the top right corner on every
-  page - a blue microphone while it listens, amber dots while it thinks, a
-  green speaker while it answers, red for no connection to the assistant, no
-  Wi-Fi or an error, a grey crossed-out microphone while the microphone is
-  muted. Nothing when it is idle.
-- **Conversation**: what the satellite heard and the answer of the assistant,
-  a few seconds after the end. When the assistant asks something and listens
-  again for the answer (for example "Turn on the lamp? Say yes or no."), a
-  hint to answer by voice is added. Only a text with a "?" counts as a
-  question. With ioBroker.assistant 1.4.7 or newer the question also gets
-  **Yes / No** buttons: a touch sends the event **Confirm answer**
-  (`confirm_answer`, types `yes` / `no`), stops listening, and the
-  answer of the assistant comes as an announcement with its text on the
-  screen. Older versions of the assistant ignore the touch.
-- **Volume**: a bar for two seconds whenever the volume changes.
-- **Ringing**: a ringing timer or alarm fills the screen with an orange "Stop";
-  a touch anywhere silences it, like the Play/Pause button.
-- **System** (swipe right): the firmware version (the release, or the build
-  date of a build of your own), Wi-Fi with signal, IP, uptime, free memory, the
-  connection to the assistant. **FW Update** (top right) looks for a new
-  release: without one a message says that the latest firmware is installed;
-  with one it asks Yes/No and installs it over the air (ready-made firmware
-  only). While any new firmware is written - from the screen, from ioBroker or
-  from ESPHome - a blue screen asks not to unplug the device and shows the
-  progress. **Restart** (bottom right) restarts the device after a Yes.
-- **Values** (swipe left): four tiles with numbers that something else writes
-  into the entities **Value 1** ... **Value 4** (see below).
-- **Switches** (swipe left once more): four tiles for the entities
-  **Switch 1** ... **Switch 4**; a touch switches, a lit tile is on. ioBroker
-  connects them with its states in both ways (see below).
-- **Settings** (gear): volume, display brightness by day and at night, LED
-  ring brightness, microphone gain (dB), microphone off, night mode, wake
-  sound, language, Wi-Fi.
-
-Entities of the display:
-
-| Entity | Default | What it does |
-|---|---|---|
-| **Display language** | `Deutsch` | Language of the date and the texts on the screen: Deutsch, English, Русский. The satellite does not learn the language of the assistant, so it is set here. The first value comes from the substitution `display_language`. |
-| **Display brightness** | 100 % | Backlight during the day. |
-| **Display night brightness** | 0 % | Backlight while **Night mode** is on; 0 turns it off. A touch lights the display for 10 seconds, and it lights by itself while you talk to the assistant or a timer rings. |
-
-**Values from ioBroker.** ioBroker.assistant shows the entities of the
-satellite as states, and writing such a state sets the entity. So a script
-fills the values page; the labels, units and decimals are substitutions in
-your `waveshare-va.yaml`:
-
-```yaml
-substitutions:
-  value_1_label: "Außen"
-  value_1_unit: "°C"
-  value_1_decimals: "1"
-```
+A small script in the JavaScript adapter connects your states with the tiles. Labels are written once (above) or
+in the admin. Example for a satellite in the room "Gast":
 
 ```js
-// ioBroker JavaScript: copy states to the values page of the satellite "Gast"
 const target = 'assistant.0.satellites.Gast.controls.';
+
+// values page: copy states to the tiles
 const values = {
     value_1: 'hm-rpc.0.ABC123.1.TEMPERATURE', // your states
     value_2: 'mqtt.0.livingroom.humidity',
 };
 for (const [slot, source] of Object.entries(values)) {
-    const copy = val => setState(target + slot, Number(val)); // ack false = a command to the device
+    const copy = val => setState(target + slot, Number(val)); // without ack = a command to the board
     on({ id: source, change: 'ne' }, obj => copy(obj.state.val));
     getState(source, (err, state) => state && copy(state.val));
 }
-```
 
-A value of -999999 (the start value) is shown as "–".
-
-**Labels from ioBroker.** With ioBroker.assistant 1.4.8 or newer the labels,
-units and decimals are entities too: **Value 1 label**, **Value 1 unit**,
-**Value 1 decimals** ... and **Switch 1 label** ... (states
-`assistant.0.satellites.<satellite>.controls.value_1_label` and so on).
-Writing them renames the tiles at once, without a new firmware; the device
-keeps them. The substitutions (`value_1_label`, `switch_1_label`, ...) are only
-the values at the first start.
-
-**Switches from ioBroker.** The same in both ways: a touch on a tile switches
-the state in ioBroker, and a change of the state lights or darkens the tile.
-Labels: the entities **Switch 1 label** ... (see above), first values from the
-substitutions `switch_1_label` ... `switch_4_label`.
-
-```js
-// ioBroker JavaScript: connect the switches page of the satellite "Gast" with states
-const target = 'assistant.0.satellites.Gast.controls.';
+// switches page: both ways
 const switches = {
-    switch_1: 'hm-rpc.0.ABC123.1.STATE', // your states
+    switch_1: 'hm-rpc.0.ABC123.1.STATE',
     switch_2: 'zigbee.0.lamp.state',
 };
 for (const [slot, source] of Object.entries(switches)) {
-    // a touch on the display (the device reports its new state, ack true)
-    on({ id: target + slot, change: 'ne', ack: true }, obj => setState(source, !!obj.state.val));
-    // the state changed elsewhere: show it (ack false = a command to the device)
-    on({ id: source, change: 'ne' }, obj => setState(target + slot, !!obj.state.val));
+    on({ id: target + slot, change: 'ne', ack: true }, obj => setState(source, !!obj.state.val)); // a touch
+    on({ id: source, change: 'ne' }, obj => setState(target + slot, !!obj.state.val)); // changed elsewhere
     getState(source, (err, state) => state && setState(target + slot, !!state.val));
 }
+
+// labels (once)
+setState(target + 'value_1_label', 'Außen');
+setState(target + 'value_1_unit', '°C');
+setState(target + 'switch_1_label', 'Licht Bad');
 ```
 
-**Which touch controller?** The display exists in two versions. **Rev 1.1**
-(V2, printed on the back) has a **CST3530** at I2C 0x58, which ESPHome does
-not support; `components/cst3530` is a driver for it, written after
-Waveshare's `esp_lcd_touch_cst3530` (Apache-2.0). The older version has a
-**CST328** at 0x1A: replace the `touchscreen:` block in `display.yaml` with
-ESPHome's own `platform: cst328` (not tested here).
+A value tile shows "–" until the script wrote a number.
 
-Touch points are logged at DEBUG level (`touch x=… y=…`), which helps when
-checking the orientation.
+## Reminders (with pi-agent)
 
-### Custom wake word models
+Asked on the satellite ("Erinnere mich in zehn Minuten daran, die Wäsche aufzuhängen"), pi-agent 0.9.5+ sets the
+reminder as a **timer on this satellite**: it counts down on the display, rings, and then the text is spoken. A
+reminder further than 24 hours ahead is spoken on the satellite when it is due. Short phrases like "in einer
+Minute" are often taken by ioBroker.assistant itself as a plain timer.
 
-Any of the four slots can be replaced with any microWakeWord v2 model by
-extending it by `id` in your own config:
+## Troubleshooting
 
-```yaml
-micro_wake_word:
-  models:
-    - id: !extend alexa
-      model: https://example.com/my_wake_word.json
-      # probability_cutoff: 0.85   # optional, overrides the manifest default
-```
+- **No port on the install page:** hold BOOT while plugging in the USB cable; use a data cable, not a charging one.
+- **Wrong Wi-Fi password:** the board opens the access point *Waveshare-VA Setup* after about a minute; on the
+  display, gear > WLAN.
+- **The clock is wrong:** it comes from the internet (NTP) and the time zone is Germany.
+- **Logs:** in ioBroker.assistant (debug level) or, with ESPHome installed, `esphome logs release-display.yaml
+  --device <ip>`.
 
-The **Wake word sensitivity** presets are relative to each model's default
-cutoff (its manifest value, or `probability_cutoff:` above): *Slightly
-sensitive* uses the default, *Moderately* and *Very sensitive* lower it step by
-step. For exact control, set the select to **Custom** and use the **Wake word
-threshold** slider, from 0.50 to 0.99. It applies to whichever wake word is
-active. Lower values trigger more easily and give more false activations. On
-first boot the slider starts at the active model's default cutoff; the models
-differ (0.90 for Alexa, 0.97 for Okay Nabu), so revisit it after changing the
-wake word.
+## Building it yourself (optional)
 
-## Claude Code skill
+Not needed to use the board - only to change the firmware.
 
-This repo ships a [Claude Code](https://claude.com/claude-code) skill at
-[`skill/waveshare-esp32-s3-audio/`](skill/waveshare-esp32-s3-audio/SKILL.md):
-the pinout, the shared-I2S constraint, and the gotchas that cost real debugging
-time. Install it user-wide so any session picks it up:
+- `release-display.yaml` / `release-core.yaml`: the ready-made firmware (with / without display), built by
+  `.github/workflows/release.yml` on every tag `v*` and published with the install page on GitHub Pages.
+- `base/core.yaml`: audio, wake word, LED ring, buttons, timers; `base/display.yaml`: the display;
+  `base/release.yaml`: Wi-Fi setup, updates, NTP clock, the "ioBroker" wake word.
+- `components/cst3530`: the touch driver (ESPHome has none for this chip), written after Waveshare's
+  `esp_lcd_touch_cst3530` (Apache-2.0).
 
 ```bash
-cp -r skill/waveshare-esp32-s3-audio ~/.claude/skills/
+pip install esphome==2026.10.2
+cp secrets.example.yaml secrets.yaml   # the release firmware removes its Wi-Fi again
+esphome compile release-display.yaml
 ```
+
+Hardware notes - pinout, the shared I2S bus of the two codecs, the expander, the gotchas - are in
+[docs/HARDWARE.md](docs/HARDWARE.md); the history is in [CHANGELOG.md](CHANGELOG.md).
 
 ## Credits
 
-- **[jensenbox](https://github.com/jensenbox/waveshare-esp32-s3-audio)**: the
-  ESP-master I2S layout for this board that the audio setup is based on.
-- **ESPHome**: everything the firmware is built out of.
-- **[Home Assistant Voice PE](https://github.com/esphome/home-assistant-voice-pe)**:
-  the sounds, and the phase/ducking model the LED state machine follows.
-- **[clemenszwerg](https://github.com/clemenszwerg)**: diagnosed the ESPHome
-  2026.10 build break and found the `const` fix ([#11](https://github.com/MichalZaniewicz/esphome-waveshare-esp32-s3-audio-va/issues/11)).
+- **[MichalZaniewicz](https://github.com/MichalZaniewicz/esphome-waveshare-esp32-s3-audio-va)**: the original
+  ESPHome satellite for this board - audio core, LED ring, timers - that this fork builds on.
+- **[jensenbox](https://github.com/jensenbox/waveshare-esp32-s3-audio)**: the I2S layout of this board the audio is
+  based on.
+- **[ioBroker.assistant](https://github.com/ioBroker/ioBroker.assistant)** (@GermanBluefox): the satellite side in
+  ioBroker, the Yes/No answer, timers and labels of the screen.
+- **ESPHome** and **[Home Assistant Voice PE](https://github.com/esphome/home-assistant-voice-pe)** (sounds, the
+  phase model of the LED ring).
+- **Waveshare**: `esp_lcd_touch_cst3530`, the reference for the touch driver.
