@@ -2,6 +2,15 @@
 
 ## [Unreleased]
 
+## [1.3.9] - 2026-11-05
+
+### Added
+- **Now playing on the display.** While the media player plays or is paused
+  (music, a radio stream), a bar at the bottom of the clock shows the title
+  (text entity Media title, written by ioBroker) and play/pause, stop and
+  volume buttons. A stream URL from ioBroker needs ioBroker.assistant to pass
+  it on (requested).
+
 ## [1.3.8] - 2026-11-05
 
 ### Added

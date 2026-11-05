@@ -311,6 +311,17 @@ text:
     restore_value: true
     initial_value: "${switch_4_label}"
 
+  # What plays now (a radio station ...), shown in the bar at the bottom of the clock; written by ioBroker.
+  - platform: template
+    id: media_title
+    name: "Media title"
+    icon: "mdi:radio"
+    mode: text
+    max_length: 48
+    optimistic: true
+    restore_value: false
+    initial_value: ""
+
 select:
   # Read by the lambdas only (no on_value: a restored select fires it during setup).
   - platform: template
@@ -471,7 +482,8 @@ font:
     id: font_icons
     size: 30
     glyphs: ["\U000F036C", "\U000F036D", "\U000F01D8", "\U000F057E", "\U000F05AA", "\U000F0319", "\U000F0028",
-             "\U000F0493", "\U000F0141", "\U000F0020", "\U000F05A9"]
+             "\U000F0493", "\U000F0141", "\U000F0020", "\U000F05A9",
+             "\U000F040A", "\U000F03E4", "\U000F04DB", "\U000F075E", "\U000F075D"]
   - file: "gfonts://Roboto@500"
     id: font_stop
     size: 64
@@ -857,6 +869,98 @@ lvgl:
             text_font: font_date
             text_color: 0xFBBF24
             text: ""
+        # Now playing (media pipeline: music, radio): title and play/pause, stop, volume.
+        - obj:
+            id: media_bar
+            hidden: true
+            align: BOTTOM_MID
+            width: 100%
+            height: 42
+            bg_color: 0x111827
+            bg_opa: COVER
+            border_width: 0
+            radius: 0
+            pad_all: 2
+            scrollable: false
+            widgets:
+            - label:
+                id: lbl_media_title
+                align: LEFT_MID
+                x: 8
+                width: 132
+                long_mode: DOT
+                text_font: font_small
+                text_color: 0xE2E8F0
+                text: ""
+            - button:
+                id: btn_media_play
+                align: RIGHT_MID
+                x: -138
+                width: 40
+                height: 38
+                pad_all: 0
+                bg_color: 0x1E293B
+                shadow_width: 0
+                on_click:
+                  - media_player.toggle: external_media_player
+                widgets:
+                  - label:
+                      id: lbl_media_play
+                      align: CENTER
+                      text_font: font_icons
+                      text_color: 0xFFFFFF
+                      text: "\U000F040A"
+            - button:
+                id: btn_media_stop
+                align: RIGHT_MID
+                x: -94
+                width: 40
+                height: 38
+                pad_all: 0
+                bg_color: 0x1E293B
+                shadow_width: 0
+                on_click:
+                  - media_player.stop: external_media_player
+                widgets:
+                  - label:
+                      align: CENTER
+                      text_font: font_icons
+                      text_color: 0xFFFFFF
+                      text: "\U000F04DB"
+            - button:
+                id: btn_media_down
+                align: RIGHT_MID
+                x: -50
+                width: 40
+                height: 38
+                pad_all: 0
+                bg_color: 0x1E293B
+                shadow_width: 0
+                on_click:
+                  - media_player.volume_down: external_media_player
+                widgets:
+                  - label:
+                      align: CENTER
+                      text_font: font_icons
+                      text_color: 0xFFFFFF
+                      text: "\U000F075E"
+            - button:
+                id: btn_media_up
+                align: RIGHT_MID
+                x: -6
+                width: 40
+                height: 38
+                pad_all: 0
+                bg_color: 0x1E293B
+                shadow_width: 0
+                on_click:
+                  - media_player.volume_up: external_media_player
+                widgets:
+                  - label:
+                      align: CENTER
+                      text_font: font_icons
+                      text_color: 0xFFFFFF
+                      text: "\U000F075D"
 
     - id: page_system
       bg_color: 0x000000
@@ -1603,6 +1707,38 @@ interval:
                 lv_label_set_text(labels[i], on ? t_on[lang] : t_off[lang]);
                 lv_obj_set_style_text_color(labels[i], lv_color_hex(on ? 0xFEF3C7 : 0x94A3B8), 0);
               }
+            }
+          }
+
+          // now playing: the bar at the bottom of the clock (an announcement over music keeps it)
+          {
+            using media_player::MediaPlayerState;
+            static bool shown_bar = false;
+            static int shown_play = -1;
+            static std::string shown_title = "-";
+            auto mp_state = id(external_media_player)->state;
+            bool music = mp_state == MediaPlayerState::MEDIA_PLAYER_STATE_PLAYING ||
+                         mp_state == MediaPlayerState::MEDIA_PLAYER_STATE_PAUSED ||
+                         (shown_bar && mp_state == MediaPlayerState::MEDIA_PLAYER_STATE_ANNOUNCING);
+            if (music != shown_bar) {
+              shown_bar = music;
+              if (music) lv_obj_clear_flag(id(media_bar), LV_OBJ_FLAG_HIDDEN);
+              else lv_obj_add_flag(id(media_bar), LV_OBJ_FLAG_HIDDEN);
+              // time, date and timers move up over the bar
+              lv_obj_align(id(lbl_time), LV_ALIGN_CENTER, 0, music ? -38 : -20);
+              lv_obj_align(id(lbl_date), LV_ALIGN_CENTER, 0, music ? 34 : 60);
+              lv_obj_align(id(lbl_timer), LV_ALIGN_BOTTOM_MID, 0, music ? -44 : -10);
+            }
+            int playing = mp_state == MediaPlayerState::MEDIA_PLAYER_STATE_PLAYING ? 1 : 0;
+            if (playing != shown_play) {
+              shown_play = playing;
+              lv_label_set_text(id(lbl_media_play), playing ? "\U000F03E4" : "\U000F040A");
+            }
+            static const char *const t_music[] = {"Musik", "Music", "Музыка"};
+            std::string title = id(media_title).state.empty() ? t_music[lang] : id(media_title).state;
+            if (title != shown_title) {
+              shown_title = title;
+              lv_label_set_text(id(lbl_media_title), title.c_str());
             }
           }
 

@@ -88,6 +88,8 @@ System  ◀─ swipe ─  Clock  ─ swipe ▶  Values  ─ swipe ▶  Switches 
   speaker = answers, red = no Wi-Fi / no connection / error, grey crossed-out microphone = microphone off.
 - **Conversation:** what the board heard and the answer. A question of the assistant ("testLamp ausschalten? Sag
   ja oder nein.") gets **Ja / Nein** buttons - a touch answers like the spoken word.
+- **Now playing:** while music or a radio stream plays (or is paused), a bar at the bottom of the clock shows its
+  title and **⏯ ⏹ − +**.
 - **Volume:** a bar while the volume changes.
 - **Ringing:** an orange **Stopp** over everything; a touch anywhere stops it.
 - **System:** firmware version, Wi-Fi and signal, IP, uptime, memory, connection to the assistant; **FW Update**
@@ -113,6 +115,8 @@ All under `assistant.0.satellites.<room>.controls.`:
 | `switch_1` ... `switch_4` | the switches page (true/false, both ways) |
 | `switch_1_label` ... | label of each switch tile |
 | `confirm_answer` | the last Ja/Nein touch (`yes` / `no`), read only |
+| `media_title` | title of what plays (a station name), shown in the now-playing bar |
+| `waveshare_voice_<mac>.command` / `.volume` / `.state` | the media player: play, pause, stop, volume_up/down ...; volume 0…1 |
 | `reboot` | `true` restarts the board |
 
 ### Values and switches from ioBroker
