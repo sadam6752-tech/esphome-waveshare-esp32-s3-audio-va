@@ -1,6 +1,6 @@
 # Changelog
 
-## [Unreleased]
+## [2.0.1] - 2026-11-09
 
 ### Added
 - **Thermostat tile** (square and large): the current temperature in an arc, the target temperature between
