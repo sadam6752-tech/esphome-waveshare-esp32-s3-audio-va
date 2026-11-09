@@ -49,6 +49,8 @@ struct Tile {
   float setpoint{NAN};
   float step{0.5f};
   bool has_state{false};
+  // colour of the value, the arc, the bar and the line (0xRRGGBB); 0 = the colours of the theme
+  uint32_t color{0};
   lv_obj_t *box{nullptr};
   lv_obj_t *label{nullptr};
   lv_obj_t *value_label{nullptr};
@@ -79,6 +81,8 @@ class Tiles {
   void set_value(int page, int slot, float value);
   void set_text(int page, int slot, const std::string &text);
   void set_state(int page, int slot, bool on);
+  // Colour of the value and its arc, bar or line (0xRRGGBB), e.g. red below a threshold; 0 = the theme again.
+  void set_color(int page, int slot, int color);
   // Target temperature of a thermostat and the step of its - / + buttons.
   void set_setpoint(int page, int slot, float value, float step);
   void set_history(int page, int slot, const std::vector<float> &points);
@@ -105,6 +109,7 @@ class Tiles {
   void show_value_(Tile &t);
   void show_state_(Tile &t);
   void show_setpoint_(Tile &t);
+  void show_color_(Tile &t);
   void draw_chart_(Tile &t);
   void send_(int index, const char *input, float value);
 

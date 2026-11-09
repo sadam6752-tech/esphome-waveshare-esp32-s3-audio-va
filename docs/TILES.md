@@ -53,6 +53,7 @@ ESPHome actions have no optional parameters: every parameter is always sent.
 | `tile_value`    | `page`, `slot`, `value` float | Number of `value`, `gauge`, `bar`, `chart`; level 0–100 of `dimmer`. A `chart` also appends it to its line |
 | `tile_text`     | `page`, `slot`, `value` string | Shows a text instead of a number (`value` only, e.g. "Offen") |
 | `tile_state`    | `page`, `slot`, `on` bool | On/off of `switch` and `dimmer`; the relay dot of a `thermostat` (green on, grey off; hidden until the first `tile_state`) |
+| `tile_color`    | `page`, `slot`, `color` int | Colour (0xRRGGBB) of the value and of its arc, bar or line, e.g. red below a threshold; `0` = the colours of the theme (2.0.3+) |
 | `tile_setpoint` | `page`, `slot`, `value` float, `step` float | Target temperature of a `thermostat` and the step of its − / + buttons (2.0.1+) |
 | `tile_history`  | `page`, `slot`, `points` float[] | Replaces the line of a `chart` (at most 60 points, oldest first) |
 | `tile_clear`    | `page` int (0 = all pages) | Removes the tiles of a page |
@@ -121,6 +122,8 @@ A new icon needs a new firmware (the glyph in `font_icons` of `base/display.yaml
 ## Decisions
 
 - The adapter is **ioBroker.satellite-display**.
+- The thresholds are decided by the adapter: it sends `tile_color` when a value crosses one, so the firmware needs
+  no rules and any colour can be used. 2.0.2 and older have no `tile_color`; the adapter then sends none.
 - The small `bar` and `chart` (1 x 1: name and value on one line, the bar or the line below) came in 2.0.2; 2.0.1 refuses it with a
   warning in its log.
 - The thermostat came in 2.0.1 with its own action `tile_setpoint`, so `tile_set` keeps its parameters and

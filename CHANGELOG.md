@@ -1,5 +1,12 @@
 # Changelog
 
+## [2.0.3] - 2026-11-09
+
+### Added
+- **Colour of a tile** (action `tile_color`): the value and its arc, bar or line take a colour that ioBroker sends,
+  e.g. red when a value crosses a threshold. `0` brings back the colours of the theme. Needs
+  ioBroker.satellite-display 0.0.7.
+
 ## [2.0.2] - 2026-11-09
 
 ### Added

@@ -1668,6 +1668,13 @@ api:
         "on": bool
       then:
         - lambda: tiles::get().set_state(page, slot, on);
+    - action: tile_color
+      variables:
+        page: int
+        slot: int
+        color: int
+      then:
+        - lambda: tiles::get().set_color(page, slot, color);
     - action: tile_setpoint
       variables:
         page: int

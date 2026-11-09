@@ -516,6 +516,7 @@ bool Tiles::set(int page, int slot, int col, int row, const std::string &size_na
   this->show_value_(*t);
   this->show_state_(*t);
   this->show_setpoint_(*t);
+  this->show_color_(*t);
   ESP_LOGD(TAG, "Tile %d/%d: %s %s at column %d, row %d", page, slot, type_name.c_str(), size_name.c_str(), col, row);
   return true;
 }
@@ -637,6 +638,27 @@ void Tiles::set_state(int page, int slot, bool on) {
   t->on = on;
   t->has_state = true;
   this->show_state_(*t);
+}
+
+void Tiles::show_color_(Tile &t) {
+  bool own = t.color != 0;
+  lv_color_t accent = lv_color_hex(own ? t.color : COLOR_ACCENT);
+  // the value takes the colour only when it is set; the theme writes it white
+  if (t.value_label != nullptr && t.type != Type::DIMMER) {
+    lv_obj_set_style_text_color(t.value_label, own ? accent : lv_color_hex(COLOR_VALUE), 0);
+  }
+  if (t.arc != nullptr) lv_obj_set_style_arc_color(t.arc, accent, LV_PART_INDICATOR);
+  if (t.bar != nullptr) lv_obj_set_style_bg_color(t.bar, accent, LV_PART_INDICATOR);
+  if (t.line != nullptr) lv_obj_set_style_line_color(t.line, accent, 0);
+}
+
+void Tiles::set_color(int page, int slot, int color) {
+  Tile *t = this->tile_(page, slot);
+  if (t == nullptr || t->type == Type::NONE) return;
+  uint32_t c = static_cast<uint32_t>(color) & 0xFFFFFF;
+  if (c == t->color) return;
+  t->color = c;
+  this->show_color_(*t);
 }
 
 void Tiles::set_setpoint(int page, int slot, float value, float step) {
