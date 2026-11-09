@@ -1,6 +1,6 @@
 # Changelog
 
-## [Unreleased]
+## [2.0.0] - 2026-11-09
 
 ### Added
 - **Tile pages on the display.** Up to four pages on a grid of 2 x 4 cells, each with up to eight tiles in

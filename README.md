@@ -119,7 +119,7 @@ All under `assistant.0.satellites.<room>.controls.`:
 
 Up to four pages on a grid of 2 x 4 cells, each with up to eight tiles in four sizes (small, square, wide,
 large) and seven types: value, gauge, bar, chart, switch, dimmer and button. What is on them is not part of the
-firmware: the adapter **ioBroker.satellite-display** (in the works) connects to the board next to
+firmware: the adapter [ioBroker.satellite-display](https://github.com/sadam6752-tech/ioBroker.satellite-display) connects to the board next to
 ioBroker.assistant, sends the layout and the values of your states and switches them when a tile is touched.
 
 The board keeps no layout: after a restart or a lost connection the adapter sends it again. The format (the
