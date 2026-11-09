@@ -32,8 +32,8 @@ in the log.
 | -------- | -------------------------------------- | ----------- | ------------------------ |
 | `value`  | label, value with unit (or a text)     | s q w l     | none                     |
 | `gauge`  | label, arc from min to max, value      | q l         | none                     |
-| `bar`    | label, value, bar from min to max      | q w l       | none                     |
-| `chart`  | label, value, line of the last values  | w l         | none                     |
+| `bar`    | label, value, bar from min to max      | s q w l     | none                     |
+| `chart`  | label, value, line of the last values  | s w l       | none                     |
 | `switch` | label, toggle (lit tile when on)       | s q w       | toggle → `switch`        |
 | `dimmer` | label, toggle, slider, percent         | w l         | toggle → `switch`, slider → `level` |
 | `button` | icon, label                            | s q w       | press → `press`          |
@@ -121,6 +121,8 @@ A new icon needs a new firmware (the glyph in `font_icons` of `base/display.yaml
 ## Decisions
 
 - The adapter is **ioBroker.satellite-display**.
+- The small `bar` and `chart` (1 x 1: name and value on one line, the bar or the line below) came in 2.0.2; 2.0.1 refuses it with a
+  warning in its log.
 - The thermostat came in 2.0.1 with its own action `tile_setpoint`, so `tile_set` keeps its parameters and
   2.0.0 still works with a newer adapter (which then leaves thermostat tiles out).
 - The old entities `Value 1–4`, `Switch 1–4` and their labels, units and decimals (used via

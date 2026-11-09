@@ -1,5 +1,11 @@
 # Changelog
 
+## [Unreleased]
+
+### Added
+- **Small bar and chart tiles** (1 x 1): the name and the value on one line, the bar or the line below. Needs
+  ioBroker.satellite-display 0.0.3.
+
 ## [2.0.1] - 2026-11-09
 
 ### Added

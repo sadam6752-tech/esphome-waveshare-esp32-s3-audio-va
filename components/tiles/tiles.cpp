@@ -100,8 +100,8 @@ static bool size_allowed(Type type, Size size) {
   switch (type) {
     case Type::VALUE: return true;
     case Type::GAUGE: return size == Size::Q || size == Size::L;
-    case Type::BAR: return size != Size::S;
-    case Type::CHART: return size == Size::W || size == Size::L;
+    case Type::BAR: return true;
+    case Type::CHART: return size != Size::Q;
     case Type::SWITCH: return size != Size::L;
     case Type::DIMMER: return size == Size::W || size == Size::L;
     case Type::BUTTON: return size != Size::L;
@@ -264,7 +264,9 @@ bool Tiles::set(int page, int slot, int col, int row, const std::string &size_na
   const Fonts &f = this->fonts_;
   std::string name = label.substr(0, 24);
   bool tall = rows == 2;
-  bool one_line = (size == Size::S && type != Type::BUTTON) ||
+  // a small bar or chart: name and value on the first line, the bar or the line below
+  bool small_two_lines = size == Size::S && (type == Type::BAR || type == Type::CHART);
+  bool one_line = (size == Size::S && type != Type::BUTTON && !small_two_lines) ||
                   (size == Size::W && (type == Type::SWITCH || type == Type::DIMMER || type == Type::BUTTON));
 
   // the name: top left, or left in the middle on a one-line tile
@@ -276,7 +278,10 @@ bool Tiles::set(int page, int slot, int col, int row, const std::string &size_na
       lv_obj_set_width(t->label, lw);
       lv_obj_align(t->label, LV_ALIGN_LEFT_MID, 9, 0);
     } else {
-      lv_obj_set_width(t->label, (type == Type::DIMMER && tall) ? w - 18 - 54 : w - 18);
+      int lw = w - 18;
+      if (type == Type::DIMMER && tall) lw = w - 18 - 54;
+      if (small_two_lines) lw = w - 18 - 62;
+      lv_obj_set_width(t->label, lw);
       lv_obj_set_pos(t->label, 9, 6);
     }
   }
@@ -287,7 +292,9 @@ bool Tiles::set(int page, int slot, int col, int row, const std::string &size_na
     case Type::CHART: {
       const lv_font_t *font = tall ? f.large : f.medium;
       t->value_label = make_label(box, font, COLOR_VALUE, "–");
-      if (size == Size::S) {
+      if (small_two_lines) {
+        lv_obj_align(t->value_label, LV_ALIGN_TOP_RIGHT, -9, 2);
+      } else if (size == Size::S) {
         lv_obj_align(t->value_label, LV_ALIGN_RIGHT_MID, -9, 0);
       } else if (size == Size::W) {
         lv_obj_align(t->value_label, LV_ALIGN_BOTTOM_LEFT, 9, -4);
@@ -306,6 +313,9 @@ bool Tiles::set(int page, int slot, int col, int row, const std::string &size_na
         if (size == Size::W) {
           lv_obj_set_size(bar, w - 130 - 12, 8);
           lv_obj_align(bar, LV_ALIGN_RIGHT_MID, -12, 0);
+        } else if (size == Size::S) {
+          lv_obj_set_size(bar, w - 18, 6);
+          lv_obj_align(bar, LV_ALIGN_BOTTOM_LEFT, 9, -9);
         } else {
           lv_obj_set_size(bar, w - 18, 8);
           lv_obj_align(bar, LV_ALIGN_BOTTOM_LEFT, 9, -12);
@@ -318,6 +328,10 @@ bool Tiles::set(int page, int slot, int col, int row, const std::string &size_na
           t->line_w = w - 125 - 10;
           t->line_h = h - 16;
           lv_obj_set_pos(line, 125, 8);
+        } else if (size == Size::S) {
+          t->line_w = w - 18;
+          t->line_h = h - 30 - 5;
+          lv_obj_set_pos(line, 9, 30);
         } else {
           t->line_w = w - 18;
           t->line_h = h - 64 - 6;
