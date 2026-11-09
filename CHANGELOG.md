@@ -1,6 +1,6 @@
 # Changelog
 
-## [Unreleased]
+## [2.0.2] - 2026-11-09
 
 ### Added
 - **Small bar and chart tiles** (1 x 1): the name and the value on one line, the bar or the line below. Needs
