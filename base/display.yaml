@@ -71,6 +71,7 @@ esphome:
             fonts.medium = id(font_text)->get_lv_font();
             fonts.large = id(font_value)->get_lv_font();
             fonts.icons = id(font_icons)->get_lv_font();
+            fonts.icons_small = id(font_icons_small)->get_lv_font();
             tiles::get().setup(id(page_tiles_1)->obj, id(page_tiles_2)->obj, id(page_tiles_3)->obj,
                                id(page_tiles_4)->obj, fonts,
                                [](int page, int slot, const char *input, float value) {
@@ -249,7 +250,13 @@ font:
              "\U000F058E", "\U000F0241", "\U000F0A72", "\U000F0079", "\U000F05AE", "\U000F05B1", "\U000F081A", "\U000F06D9",
              "\U000F00AC", "\U000F033E", "\U000F033F", "\U000F009A", "\U000F0502", "\U000F0381", "\U000F075A", "\U000F04C3",
              "\U000F0176", "\U000F072A", "\U000F0AAC", "\U000F010B", "\U000F02DC", "\U000F02E3", "\U000F04B9", "\U000F09A0",
-             "\U000F0599", "\U000F0594", "\U000F012C", "\U000F0156"]
+             "\U000F0599", "\U000F0594", "\U000F012C", "\U000F0156",
+             "\U000F0374", "\U000F0415"]
+  # minus and plus of a square thermostat tile, smaller
+  - file: "https://cdn.jsdelivr.net/npm/@mdi/font@7.4.47/fonts/materialdesignicons-webfont.ttf"
+    id: font_icons_small
+    size: 20
+    glyphs: ["\U000F0374", "\U000F0415"]
   - file: "gfonts://Roboto@500"
     id: font_stop
     size: 64
@@ -1661,6 +1668,14 @@ api:
         "on": bool
       then:
         - lambda: tiles::get().set_state(page, slot, on);
+    - action: tile_setpoint
+      variables:
+        page: int
+        slot: int
+        value: float
+        step: float
+      then:
+        - lambda: tiles::get().set_setpoint(page, slot, value, step);
     - action: tile_history
       variables:
         page: int

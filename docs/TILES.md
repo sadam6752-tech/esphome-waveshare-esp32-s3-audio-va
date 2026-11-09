@@ -1,6 +1,6 @@
 # Tile pages: format between firmware and ioBroker
 
-Status: firmware 2.0.0 (unreleased); code in `components/tiles`, actions in `base/display.yaml`.
+Status: firmware 2.0.0, the thermostat since 2.0.1; code in `components/tiles`, actions in `base/display.yaml`.
 
 The display gets up to **4 tile pages**. What is on them is not compiled into the firmware: an ioBroker
 adapter sends the layout and the values over the ESPHome Native API, and gets touches back as events.
@@ -37,6 +37,7 @@ in the log.
 | `switch` | label, toggle (lit tile when on)       | s q w       | toggle → `switch`        |
 | `dimmer` | label, toggle, slider, percent         | w l         | toggle → `switch`, slider → `level` |
 | `button` | icon, label                            | s q w       | press → `press`          |
+| `thermostat` | label, arc with the current temperature, − target +, relay dot | q l | − / + → `setpoint` |
 
 `tile_set` creates the widgets of the tile; a new `tile_set` for the slot or `tile_clear` deletes them.
 A square `switch` shows its icon bottom left; a `button` shows its icon (without one: only the name).
@@ -51,7 +52,8 @@ ESPHome actions have no optional parameters: every parameter is always sent.
 | `tile_set`      | `page` int 1–4, `slot` int 0–7, `col` int, `row` int, `size` string, `type` string, `label` string, `unit` string, `icon` string, `decimals` int, `min` float, `max` float | Places and configures one tile; the value is cleared |
 | `tile_value`    | `page`, `slot`, `value` float | Number of `value`, `gauge`, `bar`, `chart`; level 0–100 of `dimmer`. A `chart` also appends it to its line |
 | `tile_text`     | `page`, `slot`, `value` string | Shows a text instead of a number (`value` only, e.g. "Offen") |
-| `tile_state`    | `page`, `slot`, `on` bool | On/off of `switch` and `dimmer` |
+| `tile_state`    | `page`, `slot`, `on` bool | On/off of `switch` and `dimmer`; the relay dot of a `thermostat` (green on, grey off; hidden until the first `tile_state`) |
+| `tile_setpoint` | `page`, `slot`, `value` float, `step` float | Target temperature of a `thermostat` and the step of its − / + buttons (2.0.1+) |
 | `tile_history`  | `page`, `slot`, `points` float[] | Replaces the line of a `chart` (at most 60 points, oldest first) |
 | `tile_clear`    | `page` int (0 = all pages) | Removes the tiles of a page |
 
@@ -62,7 +64,9 @@ Rules:
   compiled glyphs); an unknown name shows no icon and a warning in the log.
 - `decimals` 0–3. A value tile shows "–" until it gets a value.
 - `tile_text` is not called `text`: ESPHome reserves that name for action variables.
-- `min`/`max` are used by `gauge`, `bar` and the scale of `chart` (equal values: the chart scales itself).
+- `min`/`max` are used by `gauge`, `bar`, the scale of `chart` (equal values: the chart scales itself) and
+  `thermostat` (scale of the arc and the limits of the target).
+- `tile_value` of a `thermostat` is its current temperature (the arc), `tile_setpoint` its target.
 - A value for an empty or different-type slot is ignored.
 - The firmware does not keep the layout: after every reconnect the adapter sends `tile_clear 0`, all
   `tile_set`, then the current values and histories.
@@ -76,13 +80,17 @@ A touch sends the Home Assistant event `esphome.tile_input` with the data:
 | ------- | ----- |
 | `page`  | 1–4 |
 | `slot`  | 0–7 |
-| `input` | `switch`, `level` or `press` |
-| `value` | `switch`: `1`/`0`; `level`: `0`–`100`; `press`: `1` |
+| `input` | `switch`, `level`, `press` or `setpoint` |
+| `value` | `switch`: `1`/`0`; `level`: `0`–`100`; `press`: `1`; `setpoint`: the new target temperature |
 
 The toggle and the slider change at once on the screen (optimistic); the adapter then writes the
 bound state and sends the confirmed value back with `tile_state` / `tile_value`, which corrects the
 screen when the device did not follow. The slider sends `level` once when it is released, not while
 it moves; a dimmer moved above 0 shows itself on, moved to 0 off.
+
+The − / + buttons of a `thermostat` change the target on the screen at once by one step (within
+`min`/`max`); one second after the last press the firmware sends `setpoint` once with the new target.
+While the buttons are being pressed, a `tile_setpoint` from the adapter does not overwrite the screen.
 
 A tap on a `switch` tile anywhere toggles it; a `dimmer` has its own toggle and slider. A drag on a
 slider does not swipe to the next page.
@@ -113,6 +121,8 @@ A new icon needs a new firmware (the glyph in `font_icons` of `base/display.yaml
 ## Decisions
 
 - The adapter is **ioBroker.satellite-display**.
+- The thermostat came in 2.0.1 with its own action `tile_setpoint`, so `tile_set` keeps its parameters and
+  2.0.0 still works with a newer adapter (which then leaves thermostat tiles out).
 - The old entities `Value 1–4`, `Switch 1–4` and their labels, units and decimals (used via
   `assistant.0.satellites.<satellite>.controls.*`) are **removed** together with the pages "values" and
   "switches". This breaks those controls, so the firmware with tiles is released as **2.0.0**.

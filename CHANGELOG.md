@@ -1,5 +1,13 @@
 # Changelog
 
+## [Unreleased]
+
+### Added
+- **Thermostat tile** (square and large): the current temperature in an arc, the target temperature between
+  − and + buttons, and a dot for the heating relay (green on, grey off). The buttons change the target on
+  the screen at once and send it to ioBroker one second after the last press (event input `setpoint`).
+  New action `tile_setpoint`; `tile_state` also sets the relay dot. Needs ioBroker.satellite-display 0.0.2.
+
 ## [2.0.0] - 2026-11-09
 
 ### Added

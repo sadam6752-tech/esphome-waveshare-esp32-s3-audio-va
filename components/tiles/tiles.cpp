@@ -19,6 +19,14 @@ static const uint32_t COLOR_LABEL = 0x8A9AAC;
 static const uint32_t COLOR_VALUE = 0xFFFFFF;
 static const uint32_t COLOR_ACCENT = 0x38BDF8;
 static const uint32_t COLOR_TRACK = 0x2E3A47;
+// the relay of a thermostat: heating on / off
+static const uint32_t COLOR_HEAT_ON = 0x4CAF50;
+static const uint32_t COLOR_HEAT_OFF = 0x4B5563;
+// icons of the - / + buttons of a thermostat (in font_icons, not in the list of the tiles)
+static const char *const GLYPH_MINUS = "\U000F0374";
+static const char *const GLYPH_PLUS = "\U000F0415";
+// a press of - / + is sent this long after the last one
+static const uint32_t SETPOINT_DELAY_MS = 1000;
 // the indicator of a switch that is on
 static const lv_style_selector_t SELECTOR_CHECKED =
     static_cast<lv_style_selector_t>(LV_PART_INDICATOR) | static_cast<lv_style_selector_t>(LV_STATE_CHECKED);
@@ -82,6 +90,7 @@ static bool parse_type(const std::string &s, Type &type) {
   else if (s == "switch") type = Type::SWITCH;
   else if (s == "dimmer") type = Type::DIMMER;
   else if (s == "button") type = Type::BUTTON;
+  else if (s == "thermostat") type = Type::THERMOSTAT;
   else return false;
   return true;
 }
@@ -96,6 +105,7 @@ static bool size_allowed(Type type, Size size) {
     case Type::SWITCH: return size != Size::L;
     case Type::DIMMER: return size == Size::W || size == Size::L;
     case Type::BUTTON: return size != Size::L;
+    case Type::THERMOSTAT: return size == Size::Q || size == Size::L;
     default: return false;
   }
 }
@@ -115,6 +125,51 @@ static lv_obj_t *make_label(lv_obj_t *parent, const lv_font_t *font, uint32_t co
 
 static void *user_data(int index) { return reinterpret_cast<void *>(static_cast<intptr_t>(index)); }
 static int event_index(lv_event_t *e) { return static_cast<int>(reinterpret_cast<intptr_t>(lv_event_get_user_data(e))); }
+// the - / + buttons carry the direction in the user data: index * 2 + (1 for +)
+static const int STEP_UP = 1;
+
+static lv_obj_t *make_arc(lv_obj_t *parent, int d) {
+  lv_obj_t *arc = lv_arc_create(parent);
+  lv_obj_set_size(arc, d, d);
+  lv_arc_set_bg_angles(arc, 135, 45);
+  lv_arc_set_range(arc, 0, 1000);
+  lv_arc_set_value(arc, 0);
+  lv_obj_remove_style(arc, nullptr, LV_PART_KNOB);
+  lv_obj_remove_flag(arc, LV_OBJ_FLAG_CLICKABLE);
+  lv_obj_set_style_arc_width(arc, 8, LV_PART_MAIN);
+  lv_obj_set_style_arc_width(arc, 8, LV_PART_INDICATOR);
+  lv_obj_set_style_arc_color(arc, lv_color_hex(COLOR_TRACK), LV_PART_MAIN);
+  lv_obj_set_style_arc_color(arc, lv_color_hex(COLOR_ACCENT), LV_PART_INDICATOR);
+  lv_obj_set_style_arc_rounded(arc, true, LV_PART_MAIN);
+  lv_obj_set_style_arc_rounded(arc, true, LV_PART_INDICATOR);
+  lv_obj_set_style_pad_all(arc, 0, 0);
+  return arc;
+}
+
+// a - / + button of a thermostat: an icon on a round area that lights up while pressed
+static lv_obj_t *make_step_button(lv_obj_t *parent, const lv_font_t *icons, const char *glyph, int code, int w,
+                                  int h) {
+  lv_obj_t *b = lv_obj_create(parent);
+  lv_obj_set_size(b, w, h);
+  lv_obj_set_style_bg_opa(b, LV_OPA_TRANSP, 0);
+  lv_obj_set_style_bg_color(b, lv_color_hex(COLOR_TILE_PRESSED), LV_STATE_PRESSED);
+  lv_obj_set_style_bg_opa(b, LV_OPA_COVER, LV_STATE_PRESSED);
+  lv_obj_set_style_radius(b, h / 2, 0);
+  lv_obj_set_style_border_width(b, 0, 0);
+  lv_obj_set_style_shadow_width(b, 0, 0);
+  lv_obj_set_style_pad_all(b, 0, 0);
+  no_scroll(b);
+  lv_obj_set_ext_click_area(b, 6);
+  lv_obj_t *ic = make_label(b, icons, COLOR_LABEL, glyph);
+  lv_obj_center(ic);
+  lv_obj_add_event_cb(
+      b, [](lv_event_t *e) {
+        int c = event_index(e);
+        get().on_step(c / 2, (c % 2) == STEP_UP ? 1 : -1);
+      },
+      LV_EVENT_CLICKED, user_data(code));
+  return b;
+}
 
 Tiles &get() {
   static Tiles instance;
@@ -137,6 +192,7 @@ Tile *Tiles::tile_(int page, int slot) {
 }
 
 void Tiles::remove_(Tile &t) {
+  if (t.timer != nullptr) lv_timer_delete(t.timer);
   if (t.box != nullptr) lv_obj_delete(t.box);
   t = Tile();
 }
@@ -281,23 +337,10 @@ bool Tiles::set(int page, int slot, int col, int row, const std::string &size_na
     case Type::GAUGE: {
       // below the name with some air, the value inside the arc
       int d = 78;
-      lv_obj_t *arc = lv_arc_create(box);
+      lv_obj_t *arc = make_arc(box, d);
       t->arc = arc;
-      lv_obj_set_size(arc, d, d);
       if (size == Size::Q) lv_obj_set_pos(arc, (w - d) / 2, h - d - 4);
       else lv_obj_set_pos(arc, 20, h - d - 4);
-      lv_arc_set_bg_angles(arc, 135, 45);
-      lv_arc_set_range(arc, 0, 1000);
-      lv_arc_set_value(arc, 0);
-      lv_obj_remove_style(arc, nullptr, LV_PART_KNOB);
-      lv_obj_remove_flag(arc, LV_OBJ_FLAG_CLICKABLE);
-      lv_obj_set_style_arc_width(arc, 8, LV_PART_MAIN);
-      lv_obj_set_style_arc_width(arc, 8, LV_PART_INDICATOR);
-      lv_obj_set_style_arc_color(arc, lv_color_hex(COLOR_TRACK), LV_PART_MAIN);
-      lv_obj_set_style_arc_color(arc, lv_color_hex(COLOR_ACCENT), LV_PART_INDICATOR);
-      lv_obj_set_style_arc_rounded(arc, true, LV_PART_MAIN);
-      lv_obj_set_style_arc_rounded(arc, true, LV_PART_INDICATOR);
-      lv_obj_set_style_pad_all(arc, 0, 0);
       if (size == Size::Q) {
         t->value_label = make_label(box, f.small, COLOR_VALUE, "–");
         lv_obj_align_to(t->value_label, arc, LV_ALIGN_CENTER, 0, 2);
@@ -305,6 +348,57 @@ bool Tiles::set(int page, int slot, int col, int row, const std::string &size_na
         t->value_label = make_label(box, f.large, COLOR_VALUE, "–");
         lv_obj_align(t->value_label, LV_ALIGN_LEFT_MID, 20 + d + 20, 8);
       }
+      break;
+    }
+
+    case Type::THERMOSTAT: {
+      // the current temperature in the arc, the setpoint between - and +, the relay as a dot top right
+      lv_obj_set_width(t->label, w - 18 - 24);
+      lv_obj_t *dot = lv_obj_create(box);
+      t->dot = dot;
+      lv_obj_set_size(dot, 16, 16);
+      lv_obj_set_style_radius(dot, LV_RADIUS_CIRCLE, 0);
+      lv_obj_set_style_border_width(dot, 0, 0);
+      lv_obj_set_style_bg_opa(dot, LV_OPA_COVER, 0);
+      lv_obj_remove_flag(dot, LV_OBJ_FLAG_CLICKABLE);
+      lv_obj_align(dot, LV_ALIGN_TOP_RIGHT, -10, 8);
+      lv_obj_add_flag(dot, LV_OBJ_FLAG_HIDDEN);
+
+      int code = index * 2;
+      if (size == Size::Q) {
+        // a bigger arc; the target and - / + small, low in the gap at the bottom of the arc
+        int d = 82;
+        lv_obj_t *arc = make_arc(box, d);
+        t->arc = arc;
+        lv_obj_set_pos(arc, (w - d) / 2, 21);
+        t->value_label = make_label(box, f.small, COLOR_VALUE, "–");
+        lv_obj_align_to(t->value_label, arc, LV_ALIGN_CENTER, 0, 0);
+        lv_obj_t *minus = make_step_button(box, f.icons_small, GLYPH_MINUS, code, 34, 28);
+        lv_obj_t *plus = make_step_button(box, f.icons_small, GLYPH_PLUS, code + STEP_UP, 34, 28);
+        lv_obj_align(minus, LV_ALIGN_BOTTOM_LEFT, 2, 0);
+        lv_obj_align(plus, LV_ALIGN_BOTTOM_RIGHT, -2, 0);
+        t->setpoint_label = make_label(box, f.label, COLOR_LABEL, "–");
+        lv_obj_align(t->setpoint_label, LV_ALIGN_BOTTOM_MID, 0, -3);
+      } else {
+        lv_obj_t *minus = make_step_button(box, f.icons, GLYPH_MINUS, code, 40, 34);
+        lv_obj_t *plus = make_step_button(box, f.icons, GLYPH_PLUS, code + STEP_UP, 40, 34);
+        int d = 78;
+        lv_obj_t *arc = make_arc(box, d);
+        t->arc = arc;
+        lv_obj_set_pos(arc, 20, h - d - 4);
+        t->value_label = make_label(box, f.medium, COLOR_VALUE, "–");
+        lv_obj_align_to(t->value_label, arc, LV_ALIGN_CENTER, 0, 2);
+        // the right half: - setpoint +
+        int mid = 20 + d + (w - 20 - d) / 2;
+        lv_obj_align(minus, LV_ALIGN_LEFT_MID, 20 + d + 14, 10);
+        lv_obj_align(plus, LV_ALIGN_RIGHT_MID, -12, 10);
+        t->setpoint_label = make_label(box, f.large, COLOR_VALUE, "–");
+        lv_obj_align(t->setpoint_label, LV_ALIGN_LEFT_MID, mid - 40, 10);
+      }
+      t->timer = lv_timer_create([](lv_timer_t *tm) { get().on_setpoint_timer(static_cast<int>(
+                                     reinterpret_cast<intptr_t>(lv_timer_get_user_data(tm)))); },
+                                 SETPOINT_DELAY_MS, user_data(index));
+      lv_timer_pause(t->timer);
       break;
     }
 
@@ -407,6 +501,7 @@ bool Tiles::set(int page, int slot, int col, int row, const std::string &size_na
 
   this->show_value_(*t);
   this->show_state_(*t);
+  this->show_setpoint_(*t);
   ESP_LOGD(TAG, "Tile %d/%d: %s %s at column %d, row %d", page, slot, type_name.c_str(), size_name.c_str(), col, row);
   return true;
 }
@@ -425,6 +520,8 @@ void Tiles::show_value_(Tile &t) {
   lv_label_set_text(t.value_label, buf);
   if (t.type == Type::GAUGE && t.size == Size::Q && t.arc != nullptr) {
     lv_obj_align_to(t.value_label, t.arc, LV_ALIGN_CENTER, 0, 2);
+  } else if (t.type == Type::THERMOSTAT && t.arc != nullptr) {
+    lv_obj_align_to(t.value_label, t.arc, LV_ALIGN_CENTER, 0, t.size == Size::Q ? 0 : 2);
   }
 
   float frac = 0;
@@ -437,11 +534,42 @@ void Tiles::show_value_(Tile &t) {
 }
 
 void Tiles::show_state_(Tile &t) {
+  if (t.dot != nullptr) {
+    if (t.has_state) {
+      lv_obj_set_style_bg_color(t.dot, lv_color_hex(t.on ? COLOR_HEAT_ON : COLOR_HEAT_OFF), 0);
+      lv_obj_remove_flag(t.dot, LV_OBJ_FLAG_HIDDEN);
+    } else {
+      lv_obj_add_flag(t.dot, LV_OBJ_FLAG_HIDDEN);
+    }
+  }
   if (t.sw == nullptr) return;
   if (t.on) lv_obj_add_state(t.sw, LV_STATE_CHECKED);
   else lv_obj_remove_state(t.sw, LV_STATE_CHECKED);
   if (t.type == Type::SWITCH) {
     lv_obj_set_style_bg_color(t.box, lv_color_hex(t.on ? COLOR_TILE_ON : COLOR_TILE), 0);
+  }
+}
+
+void Tiles::show_setpoint_(Tile &t) {
+  if (t.setpoint_label == nullptr) return;
+  char buf[40];
+  if (std::isnan(t.setpoint)) {
+    snprintf(buf, sizeof(buf), "–");
+  } else {
+    // as many decimals as the step needs (0.5 -> 1), at least those of the tile
+    int dec = t.decimals;
+    if (t.step < 1 && dec < 1) dec = 1;
+    if (t.step < 0.1f && dec < 2) dec = 2;
+    snprintf(buf, sizeof(buf), "%.*f%s%s", dec, t.setpoint, t.unit.empty() ? "" : " ", t.unit.c_str());
+  }
+  lv_label_set_text(t.setpoint_label, buf);
+  if (t.size == Size::Q) {
+    lv_obj_align(t.setpoint_label, LV_ALIGN_BOTTOM_MID, 0, -3);
+  } else {
+    int d = 78, w = 308;
+    int mid = 20 + d + (w - 20 - d) / 2;
+    lv_obj_update_layout(t.setpoint_label);
+    lv_obj_align(t.setpoint_label, LV_ALIGN_LEFT_MID, mid - lv_obj_get_width(t.setpoint_label) / 2, 10);
   }
 }
 
@@ -491,9 +619,20 @@ void Tiles::set_text(int page, int slot, const std::string &text) {
 
 void Tiles::set_state(int page, int slot, bool on) {
   Tile *t = this->tile_(page, slot);
-  if (t == nullptr || (t->type != Type::SWITCH && t->type != Type::DIMMER)) return;
+  if (t == nullptr || (t->type != Type::SWITCH && t->type != Type::DIMMER && t->type != Type::THERMOSTAT)) return;
   t->on = on;
+  t->has_state = true;
   this->show_state_(*t);
+}
+
+void Tiles::set_setpoint(int page, int slot, float value, float step) {
+  Tile *t = this->tile_(page, slot);
+  if (t == nullptr || t->type != Type::THERMOSTAT) return;
+  if (step > 0 && !std::isnan(step)) t->step = step;
+  // while - / + are being pressed the screen keeps what the user set
+  if (t->timer != nullptr && !lv_timer_get_paused(t->timer)) return;
+  t->setpoint = value;
+  this->show_setpoint_(*t);
 }
 
 void Tiles::set_history(int page, int slot, const std::vector<float> &points) {
@@ -577,6 +716,28 @@ void Tiles::on_slider_released(int index) {
     this->show_state_(t);
   }
   this->send_(index, "level", t.value);
+}
+
+void Tiles::on_step(int index, int dir) {
+  if (index < 0 || index >= PAGES * SLOTS) return;
+  Tile &t = this->tiles_[index / SLOTS][index % SLOTS];
+  if (t.type != Type::THERMOSTAT || std::isnan(t.setpoint)) return;
+  // to the grid of the step, within min..max
+  float v = std::round((t.setpoint + dir * t.step) / t.step) * t.step;
+  if (t.max > t.min) v = std::max(t.min, std::min(t.max, v));
+  t.setpoint = v;
+  this->show_setpoint_(t);
+  if (t.timer != nullptr) {
+    lv_timer_reset(t.timer);
+    lv_timer_resume(t.timer);
+  }
+}
+
+void Tiles::on_setpoint_timer(int index) {
+  if (index < 0 || index >= PAGES * SLOTS) return;
+  Tile &t = this->tiles_[index / SLOTS][index % SLOTS];
+  if (t.timer != nullptr) lv_timer_pause(t.timer);
+  if (t.type == Type::THERMOSTAT && !std::isnan(t.setpoint)) this->send_(index, "setpoint", t.setpoint);
 }
 
 }  // namespace tiles

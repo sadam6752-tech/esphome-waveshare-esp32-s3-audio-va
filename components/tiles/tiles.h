@@ -20,7 +20,7 @@ static const int SLOTS = 8;
 static const size_t HISTORY = 60;
 
 enum class Size : uint8_t { S, Q, W, L };
-enum class Type : uint8_t { NONE, VALUE, GAUGE, BAR, CHART, SWITCH, DIMMER, BUTTON };
+enum class Type : uint8_t { NONE, VALUE, GAUGE, BAR, CHART, SWITCH, DIMMER, BUTTON, THERMOSTAT };
 
 struct Fonts {
   const lv_font_t *label;   // tile name, ~15 px
@@ -28,9 +28,10 @@ struct Fonts {
   const lv_font_t *medium;  // value in small and wide tiles, ~22 px
   const lv_font_t *large;   // value in square and large tiles, ~34 px
   const lv_font_t *icons;   // Material Design Icons
+  const lv_font_t *icons_small;  // - / + of a square thermostat, ~20 px
 };
 
-// page 1..4, slot 0..7, input "switch" / "level" / "press"
+// page 1..4, slot 0..7, input "switch" / "level" / "press" / "setpoint"
 using InputCallback = std::function<void(int page, int slot, const char *input, float value)>;
 
 struct Tile {
@@ -44,6 +45,10 @@ struct Tile {
   std::string unit;
   float value{NAN};
   bool on{false};
+  // thermostat: target temperature, its step, and whether the relay state is known (shows the dot)
+  float setpoint{NAN};
+  float step{0.5f};
+  bool has_state{false};
   lv_obj_t *box{nullptr};
   lv_obj_t *label{nullptr};
   lv_obj_t *value_label{nullptr};
@@ -52,6 +57,10 @@ struct Tile {
   lv_obj_t *line{nullptr};
   lv_obj_t *sw{nullptr};
   lv_obj_t *slider{nullptr};
+  lv_obj_t *setpoint_label{nullptr};
+  lv_obj_t *dot{nullptr};
+  // sends the setpoint a moment after the last press of - / +
+  lv_timer_t *timer{nullptr};
   int line_w{0};
   int line_h{0};
   std::vector<float> history;
@@ -70,6 +79,8 @@ class Tiles {
   void set_value(int page, int slot, float value);
   void set_text(int page, int slot, const std::string &text);
   void set_state(int page, int slot, bool on);
+  // Target temperature of a thermostat and the step of its - / + buttons.
+  void set_setpoint(int page, int slot, float value, float step);
   void set_history(int page, int slot, const std::vector<float> &points);
   // Removes the tiles of a page, 0 = of all pages.
   void clear(int page);
@@ -84,12 +95,16 @@ class Tiles {
   void on_switch_changed(int index);
   void on_slider_moved(int index);
   void on_slider_released(int index);
+  // - (dir -1) or + (dir +1) of a thermostat
+  void on_step(int index, int dir);
+  void on_setpoint_timer(int index);
 
  protected:
   Tile *tile_(int page, int slot);
   void remove_(Tile &t);
   void show_value_(Tile &t);
   void show_state_(Tile &t);
+  void show_setpoint_(Tile &t);
   void draw_chart_(Tile &t);
   void send_(int index, const char *input, float value);
 
