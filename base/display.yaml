@@ -3,11 +3,11 @@
 # on the 18-pin LCD FPC of the ESP32-S3-AUDIO-Board. Optional: the core does not need it.
 #
 # Pages (landscape 320x240):
-#   system  <-swipe-  clock  -swipe->  values  -swipe->  switches     settings: the gear on the clock page
+#   system  <-swipe-  clock  -swipe->  tiles 1 -> 2 -> 3 -> 4     settings: the gear on the clock page
 # - clock: time, date, alarm, the running timers, the state of the assistant (icon, top right).
 # - system: Wi-Fi, IP, uptime, memory, connection to the assistant.
-# - values: four numbers that ioBroker writes (entities "Value 1".."Value 4"), labels from substitutions.
-# - switches (swipe on from the values): four tiles; a touch switches, ioBroker connects them with its states.
+# - tiles: up to four pages of tiles that ioBroker sends (ioBroker.satellite-display, actions tile_*); a page
+#   without tiles is skipped. Code: components/tiles, format: docs/TILES.md.
 # - settings: volume, display and ring brightness, microphone, night mode, wake sound, language.
 # Over every page: the conversation (what was heard, the answer, a question waits for a spoken answer),
 # the volume while it changes, and a full-screen "Stop" while a timer or the alarm rings (touch = stop).
@@ -28,28 +28,6 @@ substitutions:
   # Language of the display at the first start (Deutsch, English, Русский); later the select
   # "Display language" (the satellite does not learn the language of the assistant).
   display_language: Deutsch
-  # The values page: what each value is (first values; later the entities "Value 1 label", "Value 1 unit",
-  # "Value 1 decimals" ... set from ioBroker). ioBroker writes the numbers into the entities "Value 1".."Value 4"
-  # (assistant.0.satellites.<satellite>.controls.value_1 ...).
-  value_1_label: "Wert 1"
-  value_1_unit: ""
-  value_1_decimals: "1"
-  value_2_label: "Wert 2"
-  value_2_unit: ""
-  value_2_decimals: "1"
-  value_3_label: "Wert 3"
-  value_3_unit: ""
-  value_3_decimals: "1"
-  value_4_label: "Wert 4"
-  value_4_unit: ""
-  value_4_decimals: "1"
-  # The switches page: what each switch is (first values; later "Switch 1 label" ... from ioBroker).
-  # ioBroker connects the entities "Switch 1".."Switch 4"
-  # (assistant.0.satellites.<satellite>.controls.switch_1 ...) with its states, both ways.
-  switch_1_label: "Schalter 1"
-  switch_2_label: "Schalter 2"
-  switch_3_label: "Schalter 3"
-  switch_4_label: "Schalter 4"
 
 esphome:
   includes:
@@ -83,6 +61,22 @@ esphome:
             ota::get_global_ota_callback()->add_global_state_listener(&listener);
             #endif
 
+    # The tile pages: pages, fonts, and where a touch goes (the event esphome.tile_input).
+    - priority: -150
+      then:
+        - lambda: |-
+            tiles::Fonts fonts;
+            fonts.label = id(font_tile_label)->get_lv_font();
+            fonts.small = id(font_small)->get_lv_font();
+            fonts.medium = id(font_text)->get_lv_font();
+            fonts.large = id(font_value)->get_lv_font();
+            fonts.icons = id(font_icons)->get_lv_font();
+            tiles::get().setup(id(page_tiles_1)->obj, id(page_tiles_2)->obj, id(page_tiles_3)->obj,
+                               id(page_tiles_4)->obj, fonts,
+                               [](int page, int slot, const char *input, float value) {
+                                 id(send_tile_input).execute(page, slot, std::string(input), value);
+                               });
+
 ota:
   - id: !extend ota_esphome
     on_end:
@@ -92,7 +86,10 @@ external_components:
   - source:
       type: local
       path: components
-    components: [cst3530]
+    components: [cst3530, tiles]
+
+# Tile pages (components/tiles, docs/TILES.md).
+tiles:
 
 spi:
   - id: lcd_spi
@@ -161,156 +158,7 @@ event:
     icon: "mdi:gesture-tap-button"
     event_types: ["yes", "no"]
 
-switch:
-  - platform: template
-    id: switch_1
-    name: "Switch 1"
-    icon: "mdi:toggle-switch-outline"
-    optimistic: true
-    restore_mode: RESTORE_DEFAULT_OFF
-  - platform: template
-    id: switch_2
-    name: "Switch 2"
-    icon: "mdi:toggle-switch-outline"
-    optimistic: true
-    restore_mode: RESTORE_DEFAULT_OFF
-  - platform: template
-    id: switch_3
-    name: "Switch 3"
-    icon: "mdi:toggle-switch-outline"
-    optimistic: true
-    restore_mode: RESTORE_DEFAULT_OFF
-  - platform: template
-    id: switch_4
-    name: "Switch 4"
-    icon: "mdi:toggle-switch-outline"
-    optimistic: true
-    restore_mode: RESTORE_DEFAULT_OFF
-
-# Labels, units and decimals of the values and switches pages. The substitutions are only the first values: ioBroker
-# changes them without a new firmware (ioBroker.assistant 1.4.8+ mirrors text entities as writable states).
 text:
-  - platform: template
-    id: value_1_label
-    name: "Value 1 label"
-    icon: "mdi:label-outline"
-    entity_category: config
-    mode: text
-    max_length: 24
-    optimistic: true
-    restore_value: true
-    initial_value: "${value_1_label}"
-  - platform: template
-    id: value_1_unit
-    name: "Value 1 unit"
-    icon: "mdi:label-outline"
-    entity_category: config
-    mode: text
-    max_length: 8
-    optimistic: true
-    restore_value: true
-    initial_value: "${value_1_unit}"
-  - platform: template
-    id: value_2_label
-    name: "Value 2 label"
-    icon: "mdi:label-outline"
-    entity_category: config
-    mode: text
-    max_length: 24
-    optimistic: true
-    restore_value: true
-    initial_value: "${value_2_label}"
-  - platform: template
-    id: value_2_unit
-    name: "Value 2 unit"
-    icon: "mdi:label-outline"
-    entity_category: config
-    mode: text
-    max_length: 8
-    optimistic: true
-    restore_value: true
-    initial_value: "${value_2_unit}"
-  - platform: template
-    id: value_3_label
-    name: "Value 3 label"
-    icon: "mdi:label-outline"
-    entity_category: config
-    mode: text
-    max_length: 24
-    optimistic: true
-    restore_value: true
-    initial_value: "${value_3_label}"
-  - platform: template
-    id: value_3_unit
-    name: "Value 3 unit"
-    icon: "mdi:label-outline"
-    entity_category: config
-    mode: text
-    max_length: 8
-    optimistic: true
-    restore_value: true
-    initial_value: "${value_3_unit}"
-  - platform: template
-    id: value_4_label
-    name: "Value 4 label"
-    icon: "mdi:label-outline"
-    entity_category: config
-    mode: text
-    max_length: 24
-    optimistic: true
-    restore_value: true
-    initial_value: "${value_4_label}"
-  - platform: template
-    id: value_4_unit
-    name: "Value 4 unit"
-    icon: "mdi:label-outline"
-    entity_category: config
-    mode: text
-    max_length: 8
-    optimistic: true
-    restore_value: true
-    initial_value: "${value_4_unit}"
-  - platform: template
-    id: switch_1_label
-    name: "Switch 1 label"
-    icon: "mdi:label-outline"
-    entity_category: config
-    mode: text
-    max_length: 24
-    optimistic: true
-    restore_value: true
-    initial_value: "${switch_1_label}"
-  - platform: template
-    id: switch_2_label
-    name: "Switch 2 label"
-    icon: "mdi:label-outline"
-    entity_category: config
-    mode: text
-    max_length: 24
-    optimistic: true
-    restore_value: true
-    initial_value: "${switch_2_label}"
-  - platform: template
-    id: switch_3_label
-    name: "Switch 3 label"
-    icon: "mdi:label-outline"
-    entity_category: config
-    mode: text
-    max_length: 24
-    optimistic: true
-    restore_value: true
-    initial_value: "${switch_3_label}"
-  - platform: template
-    id: switch_4_label
-    name: "Switch 4 label"
-    icon: "mdi:label-outline"
-    entity_category: config
-    mode: text
-    max_length: 24
-    optimistic: true
-    restore_value: true
-    initial_value: "${switch_4_label}"
-
   # What plays now (a radio station ...), shown in the bar at the bottom of the clock; written by ioBroker.
   - platform: template
     id: media_title
@@ -335,54 +183,6 @@ select:
     options: [Deutsch, English, Русский]
 
 number:
-  - platform: template
-    id: value_1_decimals
-    name: "Value 1 decimals"
-    icon: "mdi:decimal"
-    entity_category: config
-    optimistic: true
-    restore_value: true
-    initial_value: ${value_1_decimals}
-    min_value: 0
-    max_value: 3
-    step: 1
-    mode: box
-  - platform: template
-    id: value_2_decimals
-    name: "Value 2 decimals"
-    icon: "mdi:decimal"
-    entity_category: config
-    optimistic: true
-    restore_value: true
-    initial_value: ${value_2_decimals}
-    min_value: 0
-    max_value: 3
-    step: 1
-    mode: box
-  - platform: template
-    id: value_3_decimals
-    name: "Value 3 decimals"
-    icon: "mdi:decimal"
-    entity_category: config
-    optimistic: true
-    restore_value: true
-    initial_value: ${value_3_decimals}
-    min_value: 0
-    max_value: 3
-    step: 1
-    mode: box
-  - platform: template
-    id: value_4_decimals
-    name: "Value 4 decimals"
-    icon: "mdi:decimal"
-    entity_category: config
-    optimistic: true
-    restore_value: true
-    initial_value: ${value_4_decimals}
-    min_value: 0
-    max_value: 3
-    step: 1
-    mode: box
   - platform: template
     id: lcd_day_brightness
     name: "Display brightness"
@@ -409,51 +209,6 @@ number:
     max_value: 100
     step: 5
     unit_of_measurement: "%"
-  # The values page. -999999 = no value yet (shown as "–").
-  - platform: template
-    id: value_1
-    name: "Value 1"
-    icon: "mdi:numeric-1-box-outline"
-    optimistic: true
-    restore_value: true
-    initial_value: -999999
-    min_value: -999999
-    max_value: 999999
-    step: 0.01
-    mode: box
-  - platform: template
-    id: value_2
-    name: "Value 2"
-    icon: "mdi:numeric-2-box-outline"
-    optimistic: true
-    restore_value: true
-    initial_value: -999999
-    min_value: -999999
-    max_value: 999999
-    step: 0.01
-    mode: box
-  - platform: template
-    id: value_3
-    name: "Value 3"
-    icon: "mdi:numeric-3-box-outline"
-    optimistic: true
-    restore_value: true
-    initial_value: -999999
-    min_value: -999999
-    max_value: 999999
-    step: 0.01
-    mode: box
-  - platform: template
-    id: value_4
-    name: "Value 4"
-    icon: "mdi:numeric-4-box-outline"
-    optimistic: true
-    restore_value: true
-    initial_value: -999999
-    min_value: -999999
-    max_value: 999999
-    step: 0.01
-    mode: box
 
 font:
   - file: "gfonts://Roboto@500"
@@ -463,7 +218,7 @@ font:
   - file: "gfonts://Roboto@500"
     id: font_value
     size: 34
-    glyphsets: [GF_Latin_Core]
+    glyphsets: [GF_Latin_Core, GF_Cyrillic_Core]
   - file: "gfonts://Roboto"
     id: font_date
     size: 24
@@ -476,14 +231,25 @@ font:
     id: font_small
     size: 18
     glyphsets: [GF_Latin_Core, GF_Cyrillic_Core]
+  # names of the tiles
+  - file: "gfonts://Roboto"
+    id: font_tile_label
+    size: 15
+    glyphsets: [GF_Latin_Core, GF_Cyrillic_Core]
   # Icons (Material Design Icons): microphone, microphone-off, dots, volume-high, wifi-off, lan-disconnect,
-  # alert-circle, cog, chevron-left, alarm, wifi.
+  # alert-circle, cog, chevron-left, alarm, wifi, play, pause, stop, volume, then the icons of the tiles
+  # (the list in components/tiles/tiles.cpp and docs/TILES.md).
   - file: "https://cdn.jsdelivr.net/npm/@mdi/font@7.4.47/fonts/materialdesignicons-webfont.ttf"
     id: font_icons
     size: 30
     glyphs: ["\U000F036C", "\U000F036D", "\U000F01D8", "\U000F057E", "\U000F05AA", "\U000F0319", "\U000F0028",
              "\U000F0493", "\U000F0141", "\U000F0020", "\U000F05A9",
-             "\U000F040A", "\U000F03E4", "\U000F04DB", "\U000F075E", "\U000F075D"]
+             "\U000F040A", "\U000F03E4", "\U000F04DB", "\U000F075E", "\U000F075D",
+             "\U000F0335", "\U000F06B5", "\U000F0769", "\U000F06A5", "\U000F0425", "\U000F0210", "\U000F0438", "\U000F050F",
+             "\U000F058E", "\U000F0241", "\U000F0A72", "\U000F0079", "\U000F05AE", "\U000F05B1", "\U000F081A", "\U000F06D9",
+             "\U000F00AC", "\U000F033E", "\U000F033F", "\U000F009A", "\U000F0502", "\U000F0381", "\U000F075A", "\U000F04C3",
+             "\U000F0176", "\U000F072A", "\U000F0AAC", "\U000F010B", "\U000F02DC", "\U000F02E3", "\U000F04B9", "\U000F09A0",
+             "\U000F0599", "\U000F0594", "\U000F012C", "\U000F0156"]
   - file: "gfonts://Roboto@500"
     id: font_stop
     size: 64
@@ -807,10 +573,7 @@ lvgl:
             animation: MOVE_RIGHT
             time: 200ms
       on_swipe_left:
-        - lvgl.page.show:
-            id: page_values
-            animation: MOVE_LEFT
-            time: 200ms
+        - lambda: id(show_tile_page).execute(tiles::get().next_page(0, 1), true);
       widgets:
         - button:
             id: btn_settings
@@ -1035,239 +798,53 @@ lvgl:
                   text_color: 0xFFFFFF
                   text: "Neustart"
 
-    - id: page_values
+    # Tile pages: what is on them comes from ioBroker (actions tile_*, docs/TILES.md); a page without
+    # tiles is skipped.
+    - id: page_tiles_1
       bg_color: 0x000000
       scrollable: false
-      on_swipe_right:
-        - lvgl.page.show:
-            id: page_clock
-            animation: MOVE_RIGHT
-            time: 200ms
       on_swipe_left:
-        - lvgl.page.show:
-            id: page_switches
-            animation: MOVE_LEFT
-            time: 200ms
+        - lambda: |-
+            int p = tiles::get().next_page(1, 1);
+            if (p != 0) id(show_tile_page).execute(p, true);
+      on_swipe_right:
+        - lambda: id(show_tile_page).execute(tiles::get().next_page(1, -1), false);
       widgets:
-        - obj:
-            align: TOP_LEFT
-            x: 6
-            y: 8
-            width: 150
-            height: 108
-            bg_color: 0x111827
-            border_width: 0
-            radius: 10
-            scrollable: false
-            widgets:
-              - label:
-                  align: TOP_LEFT
-                  long_mode: DOT
-                  width: 128
-                  text_font: font_small
-                  text_color: 0x94A3B8
-                  id: lbl_value_1_name
-                  text: "${value_1_label}"
-              - label:
-                  id: lbl_value_1
-                  align: BOTTOM_LEFT
-                  text_font: font_value
-                  text_color: 0xFFFFFF
-                  text: "–"
-        - obj:
-            align: TOP_RIGHT
-            x: -6
-            y: 8
-            width: 150
-            height: 108
-            bg_color: 0x111827
-            border_width: 0
-            radius: 10
-            scrollable: false
-            widgets:
-              - label:
-                  align: TOP_LEFT
-                  long_mode: DOT
-                  width: 128
-                  text_font: font_small
-                  text_color: 0x94A3B8
-                  id: lbl_value_2_name
-                  text: "${value_2_label}"
-              - label:
-                  id: lbl_value_2
-                  align: BOTTOM_LEFT
-                  text_font: font_value
-                  text_color: 0xFFFFFF
-                  text: "–"
-        - obj:
-            align: BOTTOM_LEFT
-            x: 6
-            y: -8
-            width: 150
-            height: 108
-            bg_color: 0x111827
-            border_width: 0
-            radius: 10
-            scrollable: false
-            widgets:
-              - label:
-                  align: TOP_LEFT
-                  long_mode: DOT
-                  width: 128
-                  text_font: font_small
-                  text_color: 0x94A3B8
-                  id: lbl_value_3_name
-                  text: "${value_3_label}"
-              - label:
-                  id: lbl_value_3
-                  align: BOTTOM_LEFT
-                  text_font: font_value
-                  text_color: 0xFFFFFF
-                  text: "–"
-        - obj:
-            align: BOTTOM_RIGHT
-            x: -6
-            y: -8
-            width: 150
-            height: 108
-            bg_color: 0x111827
-            border_width: 0
-            radius: 10
-            scrollable: false
-            widgets:
-              - label:
-                  align: TOP_LEFT
-                  long_mode: DOT
-                  width: 128
-                  text_font: font_small
-                  text_color: 0x94A3B8
-                  id: lbl_value_4_name
-                  text: "${value_4_label}"
-              - label:
-                  id: lbl_value_4
-                  align: BOTTOM_LEFT
-                  text_font: font_value
-                  text_color: 0xFFFFFF
-                  text: "–"
+        - arc:
+            hidden: true
+        - line:
+            hidden: true
+            points: ["0, 0", "1, 1"]
 
-    # Four switches: a touch switches; on = lit tile.
-    - id: page_switches
+    - id: page_tiles_2
       bg_color: 0x000000
       scrollable: false
+      on_swipe_left:
+        - lambda: |-
+            int p = tiles::get().next_page(2, 1);
+            if (p != 0) id(show_tile_page).execute(p, true);
       on_swipe_right:
-        - lvgl.page.show:
-            id: page_values
-            animation: MOVE_RIGHT
-            time: 200ms
-      widgets:
-        - button:
-            id: tile_sw_1
-            align: TOP_LEFT
-            x: 6
-            y: 8
-            width: 150
-            height: 108
-            bg_color: 0x1E293B
-            radius: 10
-            shadow_width: 0
-            on_click:
-              - switch.toggle: switch_1
-            widgets:
-              - label:
-                  align: TOP_LEFT
-                  width: 128
-                  long_mode: WRAP
-                  text_font: font_text
-                  text_color: 0xFFFFFF
-                  id: lbl_sw_1_name
-                  text: "${switch_1_label}"
-              - label:
-                  id: lbl_sw_1
-                  align: BOTTOM_LEFT
-                  text_font: font_small
-                  text_color: 0x94A3B8
-                  text: ""
-        - button:
-            id: tile_sw_2
-            align: TOP_RIGHT
-            x: -6
-            y: 8
-            width: 150
-            height: 108
-            bg_color: 0x1E293B
-            radius: 10
-            shadow_width: 0
-            on_click:
-              - switch.toggle: switch_2
-            widgets:
-              - label:
-                  align: TOP_LEFT
-                  width: 128
-                  long_mode: WRAP
-                  text_font: font_text
-                  text_color: 0xFFFFFF
-                  id: lbl_sw_2_name
-                  text: "${switch_2_label}"
-              - label:
-                  id: lbl_sw_2
-                  align: BOTTOM_LEFT
-                  text_font: font_small
-                  text_color: 0x94A3B8
-                  text: ""
-        - button:
-            id: tile_sw_3
-            align: BOTTOM_LEFT
-            x: 6
-            y: -8
-            width: 150
-            height: 108
-            bg_color: 0x1E293B
-            radius: 10
-            shadow_width: 0
-            on_click:
-              - switch.toggle: switch_3
-            widgets:
-              - label:
-                  align: TOP_LEFT
-                  width: 128
-                  long_mode: WRAP
-                  text_font: font_text
-                  text_color: 0xFFFFFF
-                  id: lbl_sw_3_name
-                  text: "${switch_3_label}"
-              - label:
-                  id: lbl_sw_3
-                  align: BOTTOM_LEFT
-                  text_font: font_small
-                  text_color: 0x94A3B8
-                  text: ""
-        - button:
-            id: tile_sw_4
-            align: BOTTOM_RIGHT
-            x: -6
-            y: -8
-            width: 150
-            height: 108
-            bg_color: 0x1E293B
-            radius: 10
-            shadow_width: 0
-            on_click:
-              - switch.toggle: switch_4
-            widgets:
-              - label:
-                  align: TOP_LEFT
-                  width: 128
-                  long_mode: WRAP
-                  text_font: font_text
-                  text_color: 0xFFFFFF
-                  id: lbl_sw_4_name
-                  text: "${switch_4_label}"
-              - label:
-                  id: lbl_sw_4
-                  align: BOTTOM_LEFT
-                  text_font: font_small
-                  text_color: 0x94A3B8
-                  text: ""
+        - lambda: id(show_tile_page).execute(tiles::get().next_page(2, -1), false);
+
+    - id: page_tiles_3
+      bg_color: 0x000000
+      scrollable: false
+      on_swipe_left:
+        - lambda: |-
+            int p = tiles::get().next_page(3, 1);
+            if (p != 0) id(show_tile_page).execute(p, true);
+      on_swipe_right:
+        - lambda: id(show_tile_page).execute(tiles::get().next_page(3, -1), false);
+
+    - id: page_tiles_4
+      bg_color: 0x000000
+      scrollable: false
+      on_swipe_left:
+        - lambda: |-
+            int p = tiles::get().next_page(4, 1);
+            if (p != 0) id(show_tile_page).execute(p, true);
+      on_swipe_right:
+        - lambda: id(show_tile_page).execute(tiles::get().next_page(4, -1), false);
 
     - id: page_settings
       bg_color: 0x000000
@@ -1687,29 +1264,6 @@ interval:
             else lv_obj_clear_flag(id(lbl_timer), LV_OBJ_FLAG_HIDDEN);
           }
 
-          // the switches page
-          {
-            static int shown_sw = -1;
-            static int shown_sw_lang = -1;
-            switch_::Switch *sws[] = {id(switch_1), id(switch_2), id(switch_3), id(switch_4)};
-            lv_obj_t *tiles[] = {id(tile_sw_1), id(tile_sw_2), id(tile_sw_3), id(tile_sw_4)};
-            lv_obj_t *labels[] = {id(lbl_sw_1), id(lbl_sw_2), id(lbl_sw_3), id(lbl_sw_4)};
-            int bits = 0;
-            for (int i = 0; i < 4; i++) if (sws[i]->state) bits |= 1 << i;
-            if (bits != shown_sw || int(lang) != shown_sw_lang) {
-              shown_sw = bits;
-              shown_sw_lang = lang;
-              static const char *const t_on[] = {"an", "on", "вкл"};
-              static const char *const t_off[] = {"aus", "off", "выкл"};
-              for (int i = 0; i < 4; i++) {
-                bool on = bits & (1 << i);
-                lv_obj_set_style_bg_color(tiles[i], lv_color_hex(on ? 0xB45309 : 0x1E293B), 0);
-                lv_label_set_text(labels[i], on ? t_on[lang] : t_off[lang]);
-                lv_obj_set_style_text_color(labels[i], lv_color_hex(on ? 0xFEF3C7 : 0x94A3B8), 0);
-              }
-            }
-          }
-
           // now playing: the bar at the bottom of the clock (an announcement over music keeps it)
           {
             using media_player::MediaPlayerState;
@@ -2018,31 +1572,12 @@ interval:
             if (text.empty()) lv_obj_add_flag(id(lbl_alarm), LV_OBJ_FLAG_HIDDEN);
             else lv_obj_clear_flag(id(lbl_alarm), LV_OBJ_FLAG_HIDDEN);
           }
-      # the values page
+      # a tile page that lost its tiles: back to the clock
       - lambda: |-
-          auto show = [](lv_obj_t *label, float v, int decimals, const char *unit) {
-            char buf[32];
-            if (std::isnan(v) || v <= -999998.0f) snprintf(buf, sizeof(buf), "–");
-            else snprintf(buf, sizeof(buf), "%.*f%s%s", decimals, v, unit[0] ? " " : "", unit);
-            lv_label_set_text(label, buf);
-          };
-          auto decimals = [](float d) { return std::isnan(d) ? 1 : std::max(0, std::min(3, int(d + 0.5f))); };
-          show(id(lbl_value_1), id(value_1).state, decimals(id(value_1_decimals).state), id(value_1_unit).state.c_str());
-          show(id(lbl_value_2), id(value_2).state, decimals(id(value_2_decimals).state), id(value_2_unit).state.c_str());
-          show(id(lbl_value_3), id(value_3).state, decimals(id(value_3_decimals).state), id(value_3_unit).state.c_str());
-          show(id(lbl_value_4), id(value_4).state, decimals(id(value_4_decimals).state), id(value_4_unit).state.c_str());
-          // the labels, when ioBroker changed them
-          auto label = [](lv_obj_t *obj, const std::string &text) {
-            if (text != lv_label_get_text(obj)) lv_label_set_text(obj, text.c_str());
-          };
-          label(id(lbl_value_1_name), id(value_1_label).state);
-          label(id(lbl_value_2_name), id(value_2_label).state);
-          label(id(lbl_value_3_name), id(value_3_label).state);
-          label(id(lbl_value_4_name), id(value_4_label).state);
-          label(id(lbl_sw_1_name), id(switch_1_label).state);
-          label(id(lbl_sw_2_name), id(switch_2_label).state);
-          label(id(lbl_sw_3_name), id(switch_3_label).state);
-          label(id(lbl_sw_4_name), id(switch_4_label).state);
+          lvgl::LvPageType *pages[] = {id(page_tiles_1), id(page_tiles_2), id(page_tiles_3), id(page_tiles_4)};
+          for (int p = 1; p <= 4; p++) {
+            if (pages[p - 1]->is_showing() && !tiles::get().page_used(p)) id(show_tile_page).execute(0, false);
+          }
       # the system page, while it is shown
       - if:
           condition:
@@ -2085,6 +1620,62 @@ interval:
                 lv_label_set_text(id(lbl_system), buf);
                 static const char *const t_title[] = {"System", "System", "Система"};
                 lv_label_set_text(id(lbl_system_title), t_title[lang]);
+
+# The tiles from ioBroker (docs/TILES.md). Added to the actions of the core.
+api:
+  actions:
+    - action: tile_set
+      variables:
+        page: int
+        slot: int
+        col: int
+        row: int
+        size: string
+        type: string
+        label: string
+        unit: string
+        icon: string
+        decimals: int
+        min: float
+        max: float
+      then:
+        - lambda: tiles::get().set(page, slot, col, row, size, type, label, unit, icon, decimals, min, max);
+    - action: tile_value
+      variables:
+        page: int
+        slot: int
+        value: float
+      then:
+        - lambda: tiles::get().set_value(page, slot, value);
+    - action: tile_text
+      variables:
+        page: int
+        slot: int
+        value: string
+      then:
+        - lambda: tiles::get().set_text(page, slot, value);
+    - action: tile_state
+      variables:
+        page: int
+        slot: int
+        "on": bool
+      then:
+        - lambda: tiles::get().set_state(page, slot, on);
+    - action: tile_history
+      variables:
+        page: int
+        slot: int
+        points: float[]
+      then:
+        - lambda: |-
+            std::vector<float> values;
+            for (size_t i = 0; i < points.size(); i++) values.push_back(points[i]);
+            tiles::get().set_history(page, slot, values);
+    - action: tile_clear
+      variables:
+        page: int
+      then:
+        - lambda: tiles::get().clear(page);
 
 # The conversation on the screen. Added to the triggers of the core (lists of a package are appended).
 voice_assistant:
@@ -2146,6 +1737,33 @@ voice_assistant:
     - script.execute: dialog_hide
 
 script:
+  # Show tile page 1..4, 0 = the clock; left = the animation to the left.
+  - id: show_tile_page
+    parameters:
+      page: int
+      left: bool
+    then:
+      - lambda: |-
+          lvgl::LvPageType *pages[] = {id(page_clock), id(page_tiles_1), id(page_tiles_2), id(page_tiles_3),
+                                 id(page_tiles_4)};
+          if (page < 0 || page > 4) return;
+          id(lvgl_comp)->show_page(pages[page]->index,
+                                   left ? LV_SCREEN_LOAD_ANIM_MOVE_LEFT : LV_SCREEN_LOAD_ANIM_MOVE_RIGHT, 200);
+  # A touch on a tile, to ioBroker (ioBroker.satellite-display); docs/TILES.md.
+  - id: send_tile_input
+    parameters:
+      page: int
+      slot: int
+      input: string
+      value: float
+    then:
+      - homeassistant.event:
+          event: esphome.tile_input
+          data:
+            page: !lambda return to_string(page);
+            slot: !lambda return to_string(slot);
+            input: !lambda return input;
+            value: !lambda return str_sprintf("%g", value);
   # Restart after the message was drawn.
   - id: restart_soon
     then:

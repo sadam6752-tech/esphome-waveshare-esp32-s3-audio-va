@@ -5,7 +5,7 @@
 A voice satellite for **[ioBroker.assistant](https://github.com/ioBroker/ioBroker.assistant)** on the
 [Waveshare ESP32-S3-AUDIO-Board](https://www.waveshare.com/esp32-s3-audio-board.htm): wake word on the board,
 speaker, LED ring, three buttons and, optionally, the **Waveshare 2.8inch Capacitive Touch LCD** with clock,
-timers, values and switches from ioBroker.
+timers and tile pages filled from ioBroker.
 
 **Ready-made firmware: nothing to build.** Flash it from the browser, set up Wi-Fi on the screen or the phone,
 updates come over the air.
@@ -46,7 +46,7 @@ New versions are published here (GitHub Releases); the board looks for them at s
 - **From ioBroker:** `controls.firmware.check` looks now, `controls.firmware.install` installs what
   `controls.firmware.latestVersion` shows.
 
-Settings (labels, brightness, microphone gain ...) stay on the board across updates.
+Settings (brightness, microphone gain ...) stay on the board across updates.
 
 ## Requirements
 
@@ -79,7 +79,7 @@ tested.
 ### Pages
 
 ```
-System  ◀─ swipe ─  Clock  ─ swipe ▶  Values  ─ swipe ▶  Switches        Settings: the gear on the clock
+System  ◀─ swipe ─  Clock  ─ swipe ▶  Tiles 1 ▶ 2 ▶ 3 ▶ 4        Settings: the gear on the clock
 ```
 
 - **Clock:** time, date, the alarm when it is on, the running timers at the bottom (one with its name, several as
@@ -94,8 +94,8 @@ System  ◀─ swipe ─  Clock  ─ swipe ▶  Values  ─ swipe ▶  Switches 
 - **Ringing:** an orange **Stopp** over everything; a touch anywhere stops it.
 - **System:** firmware version, Wi-Fi and signal, IP, uptime, memory, connection to the assistant; **FW Update**
   and **Neustart** (restart, asks first).
-- **Values:** four tiles with numbers from ioBroker.
-- **Switches:** four tiles that switch states in ioBroker; a lit tile is on.
+- **Tiles:** up to four pages of tiles from ioBroker - values, gauges, bars, charts, switches, dimmers and
+  buttons (see [Tile pages](#tile-pages)). A page without tiles is skipped.
 - **Settings:** volume, display brightness by day and at night, LED ring, microphone gain (dB), microphone off,
   night mode, wake sound, language, Wi-Fi.
 
@@ -110,52 +110,23 @@ All under `assistant.0.satellites.<room>.controls.`:
 |---|---|
 | `display_language` | Deutsch, English, Русский - the assistant sets it to its voice language |
 | `display_brightness` / `display_night_brightness` | backlight by day / in night mode in % (0 = off) |
-| `value_1` ... `value_4` | the numbers of the values page |
-| `value_1_label`, `value_1_unit`, `value_1_decimals` ... | label, unit and decimals of each value tile |
-| `switch_1` ... `switch_4` | the switches page (true/false, both ways) |
-| `switch_1_label` ... | label of each switch tile |
 | `confirm_answer` | the last Ja/Nein touch (`yes` / `no`), read only |
 | `media_title` | title of what plays (a station name), shown in the now-playing bar |
 | `waveshare_voice_<mac>.command` / `.volume` / `.state` | the media player: play, pause, stop, volume_up/down ...; volume 0…1 |
 | `reboot` | `true` restarts the board |
 
-### Values and switches from ioBroker
+### Tile pages
 
-A small script in the JavaScript adapter connects your states with the tiles. Labels are written once (above) or
-in the admin. Example for a satellite in the room "Gast":
+Up to four pages on a grid of 2 x 4 cells, each with up to eight tiles in four sizes (small, square, wide,
+large) and seven types: value, gauge, bar, chart, switch, dimmer and button. What is on them is not part of the
+firmware: the adapter **ioBroker.satellite-display** (in the works) connects to the board next to
+ioBroker.assistant, sends the layout and the values of your states and switches them when a tile is touched.
 
-```js
-const target = 'assistant.0.satellites.Gast.controls.';
+The board keeps no layout: after a restart or a lost connection the adapter sends it again. The format (the
+actions `tile_*` and the event `esphome.tile_input`) is in [docs/TILES.md](docs/TILES.md).
 
-// values page: copy states to the tiles
-const values = {
-    value_1: 'hm-rpc.0.ABC123.1.TEMPERATURE', // your states
-    value_2: 'mqtt.0.livingroom.humidity',
-};
-for (const [slot, source] of Object.entries(values)) {
-    const copy = val => setState(target + slot, Number(val)); // without ack = a command to the board
-    on({ id: source, change: 'ne' }, obj => copy(obj.state.val));
-    getState(source, (err, state) => state && copy(state.val));
-}
-
-// switches page: both ways
-const switches = {
-    switch_1: 'hm-rpc.0.ABC123.1.STATE',
-    switch_2: 'zigbee.0.lamp.state',
-};
-for (const [slot, source] of Object.entries(switches)) {
-    on({ id: target + slot, change: 'ne', ack: true }, obj => setState(source, !!obj.state.val)); // a touch
-    on({ id: source, change: 'ne' }, obj => setState(target + slot, !!obj.state.val)); // changed elsewhere
-    getState(source, (err, state) => state && setState(target + slot, !!state.val));
-}
-
-// labels (once)
-setState(target + 'value_1_label', 'Außen');
-setState(target + 'value_1_unit', '°C');
-setState(target + 'switch_1_label', 'Licht Bad');
-```
-
-A value tile shows "–" until the script wrote a number.
+Firmware 2.0.0 replaced the fixed values and switches pages (`value_1` ... `value_4`, `switch_1` ... `switch_4`
+and their labels) with the tile pages.
 
 ## Reminders (with pi-agent)
 

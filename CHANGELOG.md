@@ -2,6 +2,18 @@
 
 ## [Unreleased]
 
+### Added
+- **Tile pages on the display.** Up to four pages on a grid of 2 x 4 cells, each with up to eight tiles in
+  four sizes and seven types (value, gauge, bar, chart, switch, dimmer, button). ioBroker sends the layout and
+  the values with the API actions `tile_set`, `tile_value`, `tile_text`, `tile_state`, `tile_history` and
+  `tile_clear`; a touch comes back as the event `esphome.tile_input`. Meant for the adapter
+  ioBroker.satellite-display; format in docs/TILES.md.
+
+### Removed
+- **The values and switches pages** and their entities Value 1..4, Switch 1..4, their labels, units and
+  decimals (`assistant.0.satellites.<room>.controls.value_*` / `switch_*`). Scripts that wrote them have
+  nothing to write to any more: this is why the next release is 2.0.0.
+
 ## [1.3.9] - 2026-11-05
 
 ### Added
