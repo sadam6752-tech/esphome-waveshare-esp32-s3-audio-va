@@ -454,10 +454,12 @@ micro_wake_word:
   vad:
     model: https://github.com/esphome/micro-wake-word-models/raw/main/models/v2/vad.json
   on_wake_word_detected:
-    # Muted (software mute switch)? Do nothing at all.
+    # Muted (software mute switch) or the screen locked? Do nothing at all.
     - if:
         condition:
-          switch.is_off: mic_mute_switch
+          and:
+            - switch.is_off: mic_mute_switch
+            - lambda: return !id(voice_locked);
         then:
           # A timer is ringing -> the wake word just silences it.
           - if:
@@ -770,6 +772,12 @@ light:
             }
 
 globals:
+  # Set by the screen lock of the display (base/display.yaml): while locked the wake word is ignored. Not the
+  # microphone mute: its state stays as the user set it.
+  - id: voice_locked
+    type: bool
+    restore_value: no
+    initial_value: 'false'
   - id: mic_is_muted
     type: bool
     restore_value: no          # the switch forces OFF at boot (see on_client_connected)

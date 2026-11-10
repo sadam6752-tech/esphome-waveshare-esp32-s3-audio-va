@@ -1,5 +1,13 @@
 # Changelog
 
+## [2.1.0] - 2026-11-10
+
+### Added
+- **Screen lock with a PIN** (component `screenlock`, actions `lock_config` and `lock_set`, event
+  `esphome.screen_lock`): only the clock with a lock, no swipes and no wake word until the PIN is typed on a keypad.
+  The PIN is checked on the satellite against a SHA-256 hash kept in flash. Relock after some minutes, when the
+  display goes back to the clock, or by hand (the open lock next to the gear). Needs ioBroker.satellite-display 0.1.0.
+
 ## [2.0.4] - 2026-11-10
 
 ### Added

@@ -77,6 +77,13 @@ esphome:
                                [](int page, int slot, const char *input, float value) {
                                  id(send_tile_input).execute(page, slot, std::string(input), value);
                                });
+            screenlock::Fonts lock_fonts;
+            lock_fonts.digits = id(font_value)->get_lv_font();
+            lock_fonts.text = id(font_small)->get_lv_font();
+            lock_fonts.icons = id(font_icons)->get_lv_font();
+            screenlock::get().setup(lock_fonts, [](bool locked, int failed) {
+              id(send_lock_state).execute(locked, failed);
+            });
 
 ota:
   - id: !extend ota_esphome
@@ -87,10 +94,13 @@ external_components:
   - source:
       type: local
       path: components
-    components: [cst3530, tiles]
+    components: [cst3530, tiles, screenlock]
 
 # Tile pages (components/tiles, docs/TILES.md).
 tiles:
+
+# Screen lock with a PIN, set from ioBroker (components/screenlock, docs/TILES.md "Screen lock").
+screenlock:
 
 spi:
   - id: lcd_spi
@@ -251,7 +261,7 @@ font:
              "\U000F00AC", "\U000F033E", "\U000F033F", "\U000F009A", "\U000F0502", "\U000F0381", "\U000F075A", "\U000F04C3",
              "\U000F0176", "\U000F072A", "\U000F0AAC", "\U000F010B", "\U000F02DC", "\U000F02E3", "\U000F04B9", "\U000F09A0",
              "\U000F0599", "\U000F0594", "\U000F012C", "\U000F0156",
-             "\U000F0374", "\U000F0415"]
+             "\U000F0374", "\U000F0415", "\U000F006E"]
   # minus and plus of a square thermostat tile, smaller
   - file: "https://cdn.jsdelivr.net/npm/@mdi/font@7.4.47/fonts/materialdesignicons-webfont.ttf"
     id: font_icons_small
@@ -575,12 +585,16 @@ lvgl:
       bg_color: 0x000000
       scrollable: false
       on_swipe_right:
-        - lvgl.page.show:
-            id: page_system
-            animation: MOVE_RIGHT
-            time: 200ms
+        - if:
+            condition:
+              lambda: return !screenlock::get().locked();
+            then:
+              - lvgl.page.show:
+                  id: page_system
+                  animation: MOVE_RIGHT
+                  time: 200ms
       on_swipe_left:
-        - lambda: id(show_tile_page).execute(tiles::get().next_page(0, 1), true);
+        - lambda: if (!screenlock::get().locked()) id(show_tile_page).execute(tiles::get().next_page(0, 1), true);
       widgets:
         - button:
             id: btn_settings
@@ -603,6 +617,35 @@ lvgl:
                   text_font: font_icons
                   text_color: 0x64748B
                   text: "\U000F0493"
+        # screen lock: the open lock locks at once (only while the lock is on); the closed one stands for the gear
+        - button:
+            id: btn_lock
+            hidden: true
+            align: TOP_LEFT
+            x: 50
+            y: 2
+            width: 48
+            height: 44
+            bg_opa: TRANSP
+            shadow_width: 0
+            border_width: 0
+            on_click:
+              - lambda: screenlock::get().set_locked(true);
+            widgets:
+              - label:
+                  align: CENTER
+                  text_font: font_icons
+                  text_color: 0x64748B
+                  text: "\U000F033F"
+        - label:
+            id: lbl_locked
+            hidden: true
+            align: TOP_LEFT
+            x: 11
+            y: 9
+            text_font: font_icons
+            text_color: 0x64748B
+            text: "\U000F033E"
         - label:
             id: lbl_alarm
             hidden: true
@@ -731,6 +774,20 @@ lvgl:
                       text_font: font_icons
                       text_color: 0xFFFFFF
                       text: "\U000F075D"
+        # last widget, so it lies over all others: while locked a touch opens the keypad
+        - obj:
+            id: lock_catcher
+            hidden: true
+            x: 0
+            y: 0
+            width: 100%
+            height: 100%
+            bg_opa: TRANSP
+            border_width: 0
+            radius: 0
+            scrollable: false
+            on_press:
+              - lambda: screenlock::get().on_clock_touched();
 
     - id: page_system
       bg_color: 0x000000
@@ -1185,6 +1242,11 @@ globals:
     type: uint32_t
     restore_value: false
     initial_value: '0'
+  # the display just went back to the clock by itself (for the screen lock)
+  - id: back_to_clock
+    type: bool
+    restore_value: false
+    initial_value: 'false'
   - id: uptime_s
     type: uint32_t
     restore_value: false
@@ -1202,6 +1264,25 @@ interval:
   # Overlays, timers, the status icon and the backlight follow the core.
   - interval: 250ms
     then:
+      # Screen lock: keypad timeout, relock, the icons, the wake word; a locked display shows only the clock.
+      - lambda: |-
+          auto &lock = screenlock::get();
+          size_t lock_lang = id(display_language).active_index().value_or(0) % 3;
+          lock.tick(millis() - id(lcd_last_touch), id(back_to_clock), lock_lang);
+          id(back_to_clock) = false;
+          bool locked = lock.locked();
+          id(voice_locked) = locked;
+          auto show = [](lv_obj_t *o, bool visible) {
+            if (visible) lv_obj_remove_flag(o, LV_OBJ_FLAG_HIDDEN);
+            else lv_obj_add_flag(o, LV_OBJ_FLAG_HIDDEN);
+          };
+          show(id(btn_settings), !locked);
+          show(id(lbl_locked), locked);
+          show(id(btn_lock), lock.enabled() && !locked);
+          show(id(lock_catcher), locked);
+          if (locked && !id(page_clock)->is_showing()) {
+            id(lvgl_comp)->show_page(id(page_clock)->index, LV_SCREEN_LOAD_ANIM_NONE, 0);
+          }
       - lambda: |-
           size_t lang = id(display_language).active_index().value_or(0) % 3;
 
@@ -1532,6 +1613,7 @@ interval:
               return !id(page_clock)->is_showing() && !id(page_wifi)->is_showing() &&
                      !id(page_wifi_pass)->is_showing() && millis() - id(lcd_last_touch) > 60000;
           then:
+            - lambda: id(back_to_clock) = true;
             - lvgl.page.show: page_clock
       - lvgl.label.update:
           id: lbl_time
@@ -1712,6 +1794,22 @@ api:
         page: int
       then:
         - lambda: tiles::get().clear(page);
+    # Screen lock (docs/TILES.md "Screen lock"): pin_hash = SHA-256 of "satellite-display:" + PIN, 64 hex digits;
+    # mode 0 = after `minutes` without a touch, 1 = when the display goes back to the clock, 2 = only by hand.
+    - action: lock_config
+      variables:
+        enabled: bool
+        pin_hash: string
+        length: int
+        mode: int
+        minutes: int
+      then:
+        - lambda: screenlock::get().configure(enabled, pin_hash, length, mode, minutes);
+    - action: lock_set
+      variables:
+        locked: bool
+      then:
+        - lambda: screenlock::get().set_locked(locked);
 
 # The conversation on the screen. Added to the triggers of the core (lists of a package are appended).
 voice_assistant:
@@ -1785,6 +1883,18 @@ script:
           if (page < 0 || page > 4) return;
           id(lvgl_comp)->show_page(pages[page]->index,
                                    left ? LV_SCREEN_LOAD_ANIM_MOVE_LEFT : LV_SCREEN_LOAD_ANIM_MOVE_RIGHT, 200);
+  # The screen lock changed or a PIN was wrong, to ioBroker (ioBroker.satellite-display).
+  - id: send_lock_state
+    mode: queued
+    parameters:
+      locked: bool
+      failed: int
+    then:
+      - homeassistant.event:
+          event: esphome.screen_lock
+          data:
+            locked: !lambda 'return std::string(locked ? "1" : "0");'
+            failed: !lambda return to_string(failed);
   # A touch on a tile, to ioBroker (ioBroker.satellite-display); docs/TILES.md.
   - id: send_tile_input
     parameters:

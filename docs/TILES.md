@@ -104,6 +104,21 @@ slider does not swipe to the next page.
 
 Other API clients (assistant) receive the event too; it carries no meaning for them.
 
+## Screen lock (2.1.0+)
+
+| Action        | Parameters | Effect |
+| ------------- | ---------- | ------ |
+| `lock_config` | `enabled` bool, `pin_hash` string, `length` int, `mode` int, `minutes` int | The lock on/off; `pin_hash` = SHA-256 of `"satellite-display:" + PIN` as 64 hex digits, `length` 4-6; `mode` 0 = lock again after `minutes` without a touch, 1 = when the display goes back to the clock (or a minute untouched on it), 2 = only by hand. Kept in flash |
+| `lock_set`    | `locked` bool | Lock or unlock now |
+
+The event `esphome.screen_lock` (`locked` `1`/`0`, `failed` = wrong PINs in a row) reports every change.
+
+While locked the clock page shows a lock instead of the gear, swipes do nothing, other pages go back to the clock
+and the wake word is ignored (`voice_locked` of the core; the microphone mute keeps its state). A touch opens a
+keypad on the top layer: stars for the digits, the PIN is checked when all are typed, 5 wrong ones in a row wait
+60 s, 30 s without a key close it. The open lock next to the gear locks at once while the lock is on. After a
+restart a satellite with the lock on starts locked.
+
 ## Pages and navigation
 
 - Fixed pages stay: clock, system, settings, and the dialog overlays of the assistant
