@@ -85,12 +85,32 @@ api:
       variables:
         url: string
       then:
+        # a new stream over a playing one (radio MP3 44.1 kHz -> AirPlay FLAC 48 kHz) kept the old resampling: it
+        # played too fast and choppy. Stop first, wait until the player is idle, then start the new one.
+        - if:
+            condition:
+              not: media_player.is_idle
+            then:
+              - media_player.stop: player
+              - wait_until:
+                  condition: media_player.is_idle
+                  timeout: 5s
+              - script.execute:
+                  id: unstick_player
+                  next_url: !lambda return url;
+              - delay: 200ms
         - media_player.play_media:
             id: player
             media_url: !lambda return url;
     - action: media_stop
       then:
         - media_player.stop: player
+        - wait_until:
+            condition: media_player.is_idle
+            timeout: 5s
+        - script.execute:
+            id: unstick_player
+            next_url: ""
     - action: media_title
       variables:
         title: string
@@ -273,8 +293,12 @@ speaker:
     i2s_dout_pin: GPIO14
     dac_type: external
     channel: mono
+    # one fixed rate for the whole chain (the default would be 16 kHz): FLAC from AirPlay comes at 48 kHz, an MP3
+    # radio at 44.1 kHz is resampled once
+    sample_rate: 48000
+    bits_per_sample: 16bit
     timeout: never
-    buffer_duration: 100ms
+    buffer_duration: 500ms
   # announcements and media into the one output
   - platform: mixer
     id: mixing_speaker
@@ -434,6 +458,11 @@ globals:
     type: uint32_t
     restore_value: false
     initial_value: '0'
+  # A stream to start after a restart: the player hung on stopping a stream and the panel restarted itself.
+  - id: url_after_restart
+    type: std::string
+    restore_value: true
+    max_restore_data_length: 250
   # what plays now (from ioBroker, state satellites.<name>.media.title); empty = "Music"
   - id: media_title
     type: std::string
@@ -1012,6 +1041,17 @@ interval:
           }
   - interval: 1s
     then:
+      - if:
+          condition:
+            lambda: return !id(url_after_restart).empty() && wifi::global_wifi_component->is_connected();
+          then:
+            - lambda: |-
+                std::string url = id(url_after_restart);
+                id(url_after_restart) = "";
+                ESP_LOGI("panel", "Restarted for a hanging player: plays %s", url.c_str());
+                auto call = id(player)->make_call();
+                call.set_media_url(url);
+                call.perform();
       - lvgl.label.update:
           id: lbl_time
           text: !lambda |-
@@ -1101,6 +1141,22 @@ interval:
                 lv_label_set_text(id(lbl_system_title), t_title[lang]);
 
 script:
+  # The player can hang while it closes a stream (seen with the stream of ioBroker.spotify-connect: STOP and no
+  # IDLE any more, every later URL ignored). Not idle 5 s after a stop: restart, and play next_url afterwards.
+  - id: unstick_player
+    parameters:
+      next_url: string
+    then:
+      - if:
+          condition:
+            not: media_player.is_idle
+          then:
+            - logger.log:
+                level: WARN
+                format: "The player hangs on stopping a stream: restarting"
+            - lambda: id(url_after_restart) = next_url;
+            - delay: 100ms
+            - lambda: App.safe_reboot();
   # what the player does, to ioBroker (playing / paused / idle, volume 0..100)
   - id: send_media_state
     mode: queued

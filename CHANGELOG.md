@@ -10,6 +10,11 @@
   player for streams (actions `media_play`, `media_stop`, `media_volume`, `media_title`, event
   `esphome.media_state`) with a now-playing bar on the clock.
 
+### Fixed
+- **Panel audio:** the I2S chain runs fixed at 48 kHz, 16 bit, with a 500 ms buffer (the default of 16 kHz played
+  choppy and too fast); a new stream stops the playing one first; a player that hangs while it stops a stream
+  (seen with chunked HTTP streams) makes the panel restart and play the requested URL afterwards.
+
 ## [2.1.0] - 2026-11-10
 
 ### Added
