@@ -1675,6 +1675,20 @@ api:
         color: int
       then:
         - lambda: tiles::get().set_color(page, slot, color);
+    - action: tile_background
+      variables:
+        page: int
+        slot: int
+        color: int
+      then:
+        - lambda: tiles::get().set_background(page, slot, color);
+    - action: tile_toggle
+      variables:
+        page: int
+        slot: int
+        show: bool
+      then:
+        - lambda: tiles::get().set_toggle(page, slot, show);
     - action: tile_setpoint
       variables:
         page: int

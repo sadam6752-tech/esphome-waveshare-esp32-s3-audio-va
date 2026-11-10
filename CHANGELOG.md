@@ -1,5 +1,14 @@
 # Changelog
 
+## [2.0.4] - 2026-11-10
+
+### Added
+- **Background of a tile** (action `tile_background`), e.g. from the settings or from another state.
+- **Icons on small, wide and large tiles**: left in the middle (small, wide) or top left (large). With an empty
+  name the icon replaces it; a small or wide switch with an icon and a name becomes a tile switch without the
+  toggle, lit when on. Needs ioBroker.satellite-display 0.0.8.
+- **Switch without its toggle** (action `tile_toggle`), for every size: the whole tile switches and lights up.
+
 ## [2.0.3] - 2026-11-09
 
 ### Added

@@ -41,7 +41,11 @@ in the log.
 
 `tile_set` creates the widgets of the tile; a new `tile_set` for the slot or `tile_clear` deletes them.
 A square `switch` shows its icon bottom left; a `button` shows its icon (without one: only the name).
-Other types ignore the icon.
+Since 2.0.4 the small (1 x 1), wide (2 x 1) and large (2 x 2) tiles of the other types show their icon too: left in
+the middle on a small or wide tile (the rest moves right), top left on a large one (the name next to it). With an
+empty `label` the icon takes the place of the name. A small or wide `switch` with an icon **and** a name has no
+toggle: the whole tile is the switch, it lights up when on and its icon takes the accent colour. The square tiles
+(1 x 2) of the other types keep their layout without an icon.
 
 ## Actions (adapter → satellite)
 
@@ -54,6 +58,8 @@ ESPHome actions have no optional parameters: every parameter is always sent.
 | `tile_text`     | `page`, `slot`, `value` string | Shows a text instead of a number (`value` only, e.g. "Offen") |
 | `tile_state`    | `page`, `slot`, `on` bool | On/off of `switch` and `dimmer`; the relay dot of a `thermostat` (green on, grey off; hidden until the first `tile_state`) |
 | `tile_color`    | `page`, `slot`, `color` int | Colour (0xRRGGBB) of the value and of its arc, bar or line, e.g. red below a threshold; `0` = the colours of the theme (2.0.3+) |
+| `tile_background` | `page`, `slot`, `color` int | Background of the tile (0xRRGGBB), `0` = the theme; a switch that is on still lights up (2.0.4+) |
+| `tile_toggle`   | `page`, `slot`, `show` bool | A `switch` with or without its toggle; without, the whole tile is the switch and lights up when on (2.0.4+) |
 | `tile_setpoint` | `page`, `slot`, `value` float, `step` float | Target temperature of a `thermostat` and the step of its − / + buttons (2.0.1+) |
 | `tile_history`  | `page`, `slot`, `points` float[] | Replaces the line of a `chart` (at most 60 points, oldest first) |
 | `tile_clear`    | `page` int (0 = all pages) | Removes the tiles of a page |

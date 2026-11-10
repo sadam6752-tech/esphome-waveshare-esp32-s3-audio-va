@@ -430,6 +430,7 @@ bool Tiles::set(int page, int slot, int col, int row, const std::string &size_na
       if (tall && !glyph.empty()) {
         lv_obj_t *ic = make_label(box, f.icons, COLOR_LABEL, glyph.c_str());
         lv_obj_align(ic, LV_ALIGN_BOTTOM_LEFT, 9, -8);
+        t->icon = ic;
       }
       lv_obj_add_flag(box, LV_OBJ_FLAG_CLICKABLE);
       lv_obj_set_style_bg_color(box, lv_color_hex(COLOR_TILE_PRESSED), LV_STATE_PRESSED);
@@ -513,6 +514,12 @@ bool Tiles::set(int page, int slot, int col, int row, const std::string &size_na
       break;
   }
 
+  // an icon on the small, wide and large tiles (a square one keeps its layout; button and square switch have theirs)
+  if (type != Type::BUTTON && size != Size::Q) {
+    std::string glyph = icon_text(icon);
+    if (!glyph.empty()) this->place_icon_(*t, glyph, !name.empty(), w, h);
+  }
+
   this->show_value_(*t);
   this->show_state_(*t);
   this->show_setpoint_(*t);
@@ -561,7 +568,126 @@ void Tiles::show_state_(Tile &t) {
   if (t.on) lv_obj_add_state(t.sw, LV_STATE_CHECKED);
   else lv_obj_remove_state(t.sw, LV_STATE_CHECKED);
   if (t.type == Type::SWITCH) {
-    lv_obj_set_style_bg_color(t.box, lv_color_hex(t.on ? COLOR_TILE_ON : COLOR_TILE), 0);
+    this->show_background_(t);
+    if (t.icon != nullptr) {
+      uint32_t lit = t.color != 0 ? t.color : COLOR_ACCENT;
+      lv_obj_set_style_text_color(t.icon, lv_color_hex(t.on ? lit : COLOR_LABEL), 0);
+    }
+  }
+}
+
+void Tiles::show_background_(Tile &t) {
+  if (t.box == nullptr) return;
+  // a switch that is on lights up; else the own background or the theme
+  uint32_t bg = t.background != 0 ? t.background : COLOR_TILE;
+  if (t.type == Type::SWITCH && t.on) bg = COLOR_TILE_ON;
+  lv_obj_set_style_bg_color(t.box, lv_color_hex(bg), 0);
+}
+
+void Tiles::set_toggle(int page, int slot, bool show) {
+  Tile *t = this->tile_(page, slot);
+  if (t == nullptr || t->type != Type::SWITCH || t->sw == nullptr) return;
+  t->tile_switch = !show;
+  if (show) lv_obj_remove_flag(t->sw, LV_OBJ_FLAG_HIDDEN);
+  else lv_obj_add_flag(t->sw, LV_OBJ_FLAG_HIDDEN);
+  // a small or wide switch with an icon: the name stands right of it, as wide as the toggle leaves room
+  if (t->label != nullptr && t->icon != nullptr && t->size != Size::Q) {
+    int w = t->size == Size::W ? 308 : 151;
+    lv_obj_set_width(t->label, w - 47 - 9 - (show ? 54 : 0));
+    lv_obj_align(t->label, LV_ALIGN_LEFT_MID, 47, 0);
+  }
+  this->show_state_(*t);
+}
+
+void Tiles::set_background(int page, int slot, int color) {
+  Tile *t = this->tile_(page, slot);
+  if (t == nullptr || t->type == Type::NONE) return;
+  uint32_t c = static_cast<uint32_t>(color) & 0xFFFFFF;
+  if (c == t->background) return;
+  t->background = c;
+  this->show_background_(*t);
+}
+
+// The icon left in the middle of a small or wide tile (the rest moves right), or top left on a large one (the
+// name next to it, the value lower). Without a name the icon takes its place.
+void Tiles::place_icon_(Tile &t, const std::string &glyph, bool named, int w, int h) {
+  static const int ICON_W = 38;  // icon 30 px and 8 px air
+  const Fonts &f = this->fonts_;
+  t.icon = make_label(t.box, f.icons, COLOR_LABEL, glyph.c_str());
+  if (t.label != nullptr && !named) lv_obj_add_flag(t.label, LV_OBJ_FLAG_HIDDEN);
+
+  if (t.size == Size::L) {
+    lv_obj_set_pos(t.icon, 9, 4);
+    if (t.label != nullptr) {
+      lv_obj_set_width(t.label, lv_obj_get_width(t.label) - ICON_W);
+      lv_obj_set_pos(t.label, 9 + ICON_W, 11);
+    }
+    // the value below the icon, not next to it
+    if (t.value_label != nullptr && (t.type == Type::BAR || t.type == Type::CHART)) lv_obj_set_pos(t.value_label, 9, 36);
+    if (t.value_label != nullptr && t.type == Type::DIMMER) lv_obj_set_pos(t.value_label, 9, 38);
+    if (t.line != nullptr) {
+      t.line_h = h - 74 - 6;
+      lv_obj_set_pos(t.line, 9, 74);
+      lv_obj_set_size(t.line, t.line_w, t.line_h);
+    }
+    return;
+  }
+
+  // small and wide: the icon left in the middle
+  lv_obj_align(t.icon, LV_ALIGN_LEFT_MID, 9, 0);
+  int x = 9 + ICON_W;
+  bool small = t.size == Size::S;
+  switch (t.type) {
+    case Type::SWITCH:
+      if (named) {
+        // icon and name: the whole tile is the switch, the toggle goes
+        t.tile_switch = true;
+        if (t.sw != nullptr) lv_obj_add_flag(t.sw, LV_OBJ_FLAG_HIDDEN);
+        if (t.label != nullptr) {
+          lv_obj_set_width(t.label, w - x - 9);
+          lv_obj_align(t.label, LV_ALIGN_LEFT_MID, x, 0);
+        }
+      }
+      break;
+    case Type::VALUE:
+      if (t.label != nullptr) {
+        if (small) lv_obj_align(t.label, LV_ALIGN_LEFT_MID, x, 0);
+        else lv_obj_set_pos(t.label, x, 6);
+      }
+      if (t.value_label != nullptr && !small) lv_obj_align(t.value_label, LV_ALIGN_BOTTOM_LEFT, x, -4);
+      break;
+    case Type::BAR:
+    case Type::CHART:
+      if (t.label != nullptr) {
+        lv_obj_set_width(t.label, lv_obj_get_width(t.label) - ICON_W);
+        lv_obj_set_pos(t.label, x, 6);
+      }
+      if (small) {
+        if (t.bar != nullptr) {
+          lv_obj_set_size(t.bar, w - x - 9, 6);
+          lv_obj_align(t.bar, LV_ALIGN_BOTTOM_LEFT, x, -9);
+        }
+        if (t.line != nullptr) {
+          t.line_w = w - x - 9;
+          lv_obj_set_pos(t.line, x, 30);
+          lv_obj_set_size(t.line, t.line_w, t.line_h);
+        }
+      } else if (t.value_label != nullptr) {
+        lv_obj_align(t.value_label, LV_ALIGN_BOTTOM_LEFT, x, -4);
+      }
+      break;
+    case Type::DIMMER:
+      // wide: icon, name, toggle, slider, percent
+      if (t.label != nullptr) lv_obj_align(t.label, LV_ALIGN_LEFT_MID, x, 0);
+      if (t.sw != nullptr) lv_obj_align(t.sw, LV_ALIGN_LEFT_MID, (named ? 66 : 9) + ICON_W, 0);
+      if (t.slider != nullptr) {
+        int sx = (named ? 120 : 63) + ICON_W;
+        lv_obj_set_size(t.slider, w - sx - 58, 8);
+        lv_obj_align(t.slider, LV_ALIGN_LEFT_MID, sx, 0);
+      }
+      break;
+    default:
+      break;
   }
 }
 
@@ -650,6 +776,9 @@ void Tiles::show_color_(Tile &t) {
   if (t.arc != nullptr) lv_obj_set_style_arc_color(t.arc, accent, LV_PART_INDICATOR);
   if (t.bar != nullptr) lv_obj_set_style_bg_color(t.bar, accent, LV_PART_INDICATOR);
   if (t.line != nullptr) lv_obj_set_style_line_color(t.line, accent, 0);
+  // toggles and sliders of switches and dimmers take the main colour too
+  if (t.sw != nullptr) lv_obj_set_style_bg_color(t.sw, accent, SELECTOR_CHECKED);
+  if (t.slider != nullptr) lv_obj_set_style_bg_color(t.slider, accent, LV_PART_INDICATOR);
 }
 
 void Tiles::set_color(int page, int slot, int color) {
@@ -659,6 +788,8 @@ void Tiles::set_color(int page, int slot, int color) {
   if (c == t->color) return;
   t->color = c;
   this->show_color_(*t);
+  // the icon of a lit tile switch takes the colour too
+  if (t->type == Type::SWITCH) this->show_state_(*t);
 }
 
 void Tiles::set_setpoint(int page, int slot, float value, float step) {

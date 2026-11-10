@@ -51,6 +51,10 @@ struct Tile {
   bool has_state{false};
   // colour of the value, the arc, the bar and the line (0xRRGGBB); 0 = the colours of the theme
   uint32_t color{0};
+  // background of the tile (0xRRGGBB); 0 = the theme
+  uint32_t background{0};
+  // a switch with an icon and a name: the whole tile is the switch, without the toggle
+  bool tile_switch{false};
   lv_obj_t *box{nullptr};
   lv_obj_t *label{nullptr};
   lv_obj_t *value_label{nullptr};
@@ -61,6 +65,7 @@ struct Tile {
   lv_obj_t *slider{nullptr};
   lv_obj_t *setpoint_label{nullptr};
   lv_obj_t *dot{nullptr};
+  lv_obj_t *icon{nullptr};
   // sends the setpoint a moment after the last press of - / +
   lv_timer_t *timer{nullptr};
   int line_w{0};
@@ -83,6 +88,10 @@ class Tiles {
   void set_state(int page, int slot, bool on);
   // Colour of the value and its arc, bar or line (0xRRGGBB), e.g. red below a threshold; 0 = the theme again.
   void set_color(int page, int slot, int color);
+  // Background of the tile (0xRRGGBB), e.g. from another state; 0 = the theme again.
+  void set_background(int page, int slot, int color);
+  // A switch with (true) or without its toggle; without, the whole tile is the switch and lights up when on.
+  void set_toggle(int page, int slot, bool show);
   // Target temperature of a thermostat and the step of its - / + buttons.
   void set_setpoint(int page, int slot, float value, float step);
   void set_history(int page, int slot, const std::vector<float> &points);
@@ -110,6 +119,8 @@ class Tiles {
   void show_state_(Tile &t);
   void show_setpoint_(Tile &t);
   void show_color_(Tile &t);
+  void show_background_(Tile &t);
+  void place_icon_(Tile &t, const std::string &glyph, bool named, int w, int h);
   void draw_chart_(Tile &t);
   void send_(int index, const char *input, float value);
 
