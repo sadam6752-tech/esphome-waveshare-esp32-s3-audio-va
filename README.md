@@ -145,8 +145,15 @@ the clock, or only by hand with the open lock next to the gear) is set in the ad
 [`panel-lcd2.yaml`](panel-lcd2.yaml) turns the
 [Waveshare ESP32-S3-Touch-LCD-2](https://www.waveshare.com/wiki/ESP32-S3-Touch-LCD-2) (2 inch, 240x320, touch
 CST816D) into a wall or desk panel for ioBroker.satellite-display: the clock, the four pages of tiles and the screen
-lock, plus a settings page for brightness and language. The board has no microphone and no speaker, so there is no
-voice assistant on it. Its screen runs in landscape 320x240 like the 2.8 inch display, so the tiles and the editor of
+lock, a system page (swipe right from the clock: Wi-Fi, IP, uptime, memory, connection to ioBroker, restart) and a
+settings page (brightness, screen off after some minutes, language). The screen turns by itself with the board (USB
+right or left, from its IMU). The board has no microphone and no speaker, so there is no voice assistant on it.
+
+**Sound (optional):** a MAX98357A I2S amplifier on the header P2 (BCLK GPIO13, LRC GPIO12, DIN GPIO14, VIN 5V, GND;
+camera data lines, so only without a camera) gives the panel a player for MP3, FLAC and WAV streams, with a
+now-playing bar on the clock. ioBroker.satellite-display plays a URL on it (`satellites.<name>.media.url`, with
+volume, title and stop), e.g. the stream of ioBroker.airplay-receiver. The brightness can also be set from ioBroker
+(`satellites.<name>.brightness`, 0 = dark), e.g. for a night mode. Its screen runs in landscape 320x240 like the 2.8 inch display, so the tiles and the editor of
 the adapter work unchanged; add the panel in the adapter like a satellite (IP address, port 6053). The time comes
 from the network (SNTP), the board has no clock chip.
 
@@ -157,8 +164,9 @@ over USB, later over Wi-Fi:
 esphome -s build_path C:/ESPHome/build/panel run panel-lcd2.yaml
 ```
 
-The short `build_path` is needed on Windows (the paths of ESP-IDF get too long in `.esphome/build`). Without a
-reachable Wi-Fi the panel opens the access point "Tile Panel Setup".
+The short `build_path` is needed on Windows (the paths of ESP-IDF get too long in `.esphome/build`). Wi-Fi can be set
+over USB with [ESPHome Web](https://web.esphome.io) (Connect, then "Configure Wi-Fi"); without a reachable Wi-Fi the
+panel also opens the access point "Tile Panel Setup".
 
 ## Reminders (with pi-agent)
 

@@ -5,6 +5,10 @@
 ### Added
 - **Tile panel without voice:** `panel-lcd2.yaml` for the Waveshare ESP32-S3-Touch-LCD-2 (2 inch, 240x320, CST816D):
   clock, four pages of tiles, screen lock, brightness and language, time over SNTP. No ready-made image yet.
+  System page, screen off after some minutes, Wi-Fi over USB (Improv), the screen turns with the board (IMU
+  QMI8658), brightness from ioBroker (action `display_brightness`), and an optional MAX98357A amplifier: a media
+  player for streams (actions `media_play`, `media_stop`, `media_volume`, `media_title`, event
+  `esphome.media_state`) with a now-playing bar on the clock.
 
 ## [2.1.0] - 2026-11-10
 

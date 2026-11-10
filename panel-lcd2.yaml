@@ -11,6 +11,10 @@
 #
 # Build: esphome run panel-lcd2.yaml (needs secrets.yaml with wifi_ssid / wifi_password).
 # Tested 2026-11-10 on the board: display (BGR), touch, tiles from the adapter, screen lock.
+# Optional sound: a MAX98357A I2S amplifier on the header P2 (BCLK GPIO13, LRC GPIO12, DIN GPIO14, VIN 5V, GND;
+# these are camera data lines, so only without a camera). ioBroker.satellite-display plays a URL on it
+# (state satellites.<name>.media.url), e.g. the stream of an AirPlay receiver.
+# Pages: system <-swipe- clock -swipe-> tiles 1..4; settings (gear): brightness, screen off after, language.
 ###############################################################################
 
 substitutions:
@@ -76,6 +80,43 @@ api:
   # the panel keeps running when ioBroker is away
   reboot_timeout: 0s
   actions:
+    # The player from ioBroker (ioBroker.satellite-display, states satellites.<name>.media.*).
+    - action: media_play
+      variables:
+        url: string
+      then:
+        - media_player.play_media:
+            id: player
+            media_url: !lambda return url;
+    - action: media_stop
+      then:
+        - media_player.stop: player
+    - action: media_title
+      variables:
+        title: string
+      then:
+        - lambda: id(media_title) = title.substr(0, 48);
+    - action: media_volume
+      variables:
+        volume: int
+      then:
+        - media_player.volume_set:
+            id: player
+            volume: !lambda return std::min(100, std::max(0, int(volume))) / 100.0f;
+    # Brightness from ioBroker (ioBroker.satellite-display, state satellites.<name>.brightness): 0 = dark.
+    - action: display_brightness
+      variables:
+        brightness: int
+      then:
+        - if:
+            condition:
+              lambda: return brightness <= 0;
+            then:
+              - light.turn_off: lcd_backlight
+            else:
+              - number.set:
+                  id: lcd_brightness
+                  value: !lambda return std::min(100, std::max(5, int(brightness)));
     - action: tile_set
       variables:
         page: int
@@ -186,6 +227,9 @@ wifi:
 
 captive_portal:
 
+# Wi-Fi over USB: https://web.esphome.io -> Connect -> "Configure Wi-Fi" (no typing on the small screen)
+improv_serial:
+
 time:
   - platform: sntp
     id: rtc
@@ -216,6 +260,73 @@ i2c:
     scl: GPIO47
     frequency: 400kHz
 
+# Sound (optional): MAX98357A on the header. Mono, one speaker.
+i2s_audio:
+  - id: i2s_out
+    i2s_lrclk_pin: GPIO12
+    i2s_bclk_pin: GPIO13
+
+speaker:
+  - platform: i2s_audio
+    id: i2s_speaker
+    i2s_audio_id: i2s_out
+    i2s_dout_pin: GPIO14
+    dac_type: external
+    channel: mono
+    timeout: never
+    buffer_duration: 100ms
+  # announcements and media into the one output
+  - platform: mixer
+    id: mixing_speaker
+    output_speaker: i2s_speaker
+    num_channels: 1
+    source_speakers:
+      - id: announcement_mixing_input
+        timeout: never
+      - id: media_mixing_input
+        timeout: never
+  - platform: resampler
+    id: announcement_resampling_speaker
+    output_speaker: announcement_mixing_input
+  - platform: resampler
+    id: media_resampling_speaker
+    output_speaker: media_mixing_input
+
+# the decoders of the streams (ESPHome 2026.10 builds only the formats asked for; radio is mostly MP3)
+audio:
+  codecs:
+    mp3:
+    flac:
+    wav:
+
+media_player:
+  - platform: speaker
+    id: player
+    name: "Media player"
+    volume_increment: 0.05
+    volume_min: 0.3
+    volume_max: 1.0
+    announcement_pipeline:
+      speaker: announcement_resampling_speaker
+      format: FLAC
+      num_channels: 1
+      sample_rate: 48000
+    media_pipeline:
+      speaker: media_resampling_speaker
+      format: FLAC
+      num_channels: 1
+      sample_rate: 48000
+    on_state:
+      - script.execute: send_media_state
+
+# The IMU of the board: which way it stands (the screen turns with it, see the orientation sensor).
+motion:
+  - platform: qmi8658
+    id: imu
+    i2c_id: bus_i2c
+    address: 0x6B
+    update_interval: 500ms
+
 display:
   - platform: mipi_spi
     id: lcd
@@ -241,10 +352,15 @@ touchscreen:
     interrupt_pin: GPIO46
     on_touch:
       - lambda: id(lcd_last_touch) = millis();
-      - logger.log:
-          level: DEBUG
-          format: "touch x=%d y=%d"
-          args: [touch.x, touch.y]
+    # a dark screen wakes on the touch; LVGL is paused, so the touch does nothing else
+    on_release:
+      - if:
+          condition: lvgl.is_paused
+          then:
+            - lvgl.resume:
+            - light.turn_on:
+                id: lcd_backlight
+                brightness: !lambda return id(lcd_brightness).state / 100.0f;
 
 output:
   - platform: ledc
@@ -272,7 +388,30 @@ select:
     initial_option: "${display_language}"
     options: [Deutsch, English, Русский]
 
+sensor:
+  # 0 / 90 / 180 / 270 degrees, NAN when it lies flat. On this board 90 = USB right (the screen as built),
+  # 270 = USB left (the screen turned by 180 degrees); portrait and flat keep the screen as it is.
+  - platform: motion
+    motion_id: imu
+    type: orientation
+    id: imu_orientation
+    name: "Orientation"
+    entity_category: diagnostic
+
 number:
+  # the screen goes dark after this time without a touch; 0 = never
+  - platform: template
+    id: screen_off_minutes
+    name: "Display off after"
+    icon: "mdi:monitor-off"
+    entity_category: config
+    optimistic: true
+    restore_value: true
+    initial_value: 0
+    min_value: 0
+    max_value: 120
+    step: 1
+    unit_of_measurement: "min"
   - platform: template
     id: lcd_brightness
     name: "Display brightness"
@@ -292,6 +431,15 @@ number:
 
 globals:
   - id: lcd_last_touch
+    type: uint32_t
+    restore_value: false
+    initial_value: '0'
+  # what plays now (from ioBroker, state satellites.<name>.media.title); empty = "Music"
+  - id: media_title
+    type: std::string
+    restore_value: false
+  # restart asked once on the system page (a second tap within 4 s restarts)
+  - id: restart_asked
     type: uint32_t
     restore_value: false
     initial_value: '0'
@@ -341,7 +489,7 @@ font:
              "\U000F00AC", "\U000F033E", "\U000F033F", "\U000F009A", "\U000F0502", "\U000F0381", "\U000F075A", "\U000F04C3",
              "\U000F0176", "\U000F072A", "\U000F0AAC", "\U000F010B", "\U000F02DC", "\U000F02E3", "\U000F04B9", "\U000F09A0",
              "\U000F0599", "\U000F0594", "\U000F012C", "\U000F0156",
-             "\U000F0374", "\U000F0415", "\U000F006E"]
+             "\U000F0374", "\U000F0415", "\U000F006E", "\U000F0140"]
   # minus and plus of a square thermostat tile, smaller
   - file: "https://cdn.jsdelivr.net/npm/@mdi/font@7.4.47/fonts/materialdesignicons-webfont.ttf"
     id: font_icons_small
@@ -365,6 +513,15 @@ lvgl:
     - id: page_clock
       bg_color: 0x000000
       scrollable: false
+      on_swipe_right:
+        - if:
+            condition:
+              lambda: return !screenlock::get().locked();
+            then:
+              - lvgl.page.show:
+                  id: page_system
+                  animation: MOVE_RIGHT
+                  time: 200ms
       on_swipe_left:
         - lambda: if (!screenlock::get().locked()) id(show_tile_page).execute(tiles::get().next_page(0, 1), true);
       widgets:
@@ -434,6 +591,98 @@ lvgl:
             text_font: font_date
             text_color: 0xA0A0A0
             text: ""
+        # Now playing (media pipeline: music, radio): title and play/pause, stop, volume.
+        - obj:
+            id: media_bar
+            hidden: true
+            align: BOTTOM_MID
+            width: 100%
+            height: 42
+            bg_color: 0x111827
+            bg_opa: COVER
+            border_width: 0
+            radius: 0
+            pad_all: 2
+            scrollable: false
+            widgets:
+            - label:
+                id: lbl_media_title
+                align: LEFT_MID
+                x: 8
+                width: 132
+                long_mode: DOT
+                text_font: font_small
+                text_color: 0xE2E8F0
+                text: ""
+            - button:
+                id: btn_media_play
+                align: RIGHT_MID
+                x: -138
+                width: 40
+                height: 38
+                pad_all: 0
+                bg_color: 0x1E293B
+                shadow_width: 0
+                on_click:
+                  - media_player.toggle: player
+                widgets:
+                  - label:
+                      id: lbl_media_play
+                      align: CENTER
+                      text_font: font_icons
+                      text_color: 0xFFFFFF
+                      text: "\U000F040A"
+            - button:
+                id: btn_media_stop
+                align: RIGHT_MID
+                x: -94
+                width: 40
+                height: 38
+                pad_all: 0
+                bg_color: 0x1E293B
+                shadow_width: 0
+                on_click:
+                  - media_player.stop: player
+                widgets:
+                  - label:
+                      align: CENTER
+                      text_font: font_icons
+                      text_color: 0xFFFFFF
+                      text: "\U000F04DB"
+            - button:
+                id: btn_media_down
+                align: RIGHT_MID
+                x: -50
+                width: 40
+                height: 38
+                pad_all: 0
+                bg_color: 0x1E293B
+                shadow_width: 0
+                on_click:
+                  - media_player.volume_down: player
+                widgets:
+                  - label:
+                      align: CENTER
+                      text_font: font_icons
+                      text_color: 0xFFFFFF
+                      text: "\U000F075E"
+            - button:
+                id: btn_media_up
+                align: RIGHT_MID
+                x: -6
+                width: 40
+                height: 38
+                pad_all: 0
+                bg_color: 0x1E293B
+                shadow_width: 0
+                on_click:
+                  - media_player.volume_up: player
+                widgets:
+                  - label:
+                      align: CENTER
+                      text_font: font_icons
+                      text_color: 0xFFFFFF
+                      text: "\U000F075D"
         # last widget, so it lies over all others: while locked a touch opens the keypad
         - obj:
             id: lock_catcher
@@ -448,6 +697,59 @@ lvgl:
             scrollable: false
             on_press:
               - lambda: screenlock::get().on_clock_touched();
+
+    # System: firmware, Wi-Fi, IP, uptime, memory, connection to ioBroker, restart.
+    - id: page_system
+      bg_color: 0x000000
+      scrollable: false
+      on_swipe_left:
+        - lvgl.page.show:
+            id: page_clock
+            animation: MOVE_LEFT
+            time: 200ms
+      widgets:
+        - label:
+            id: lbl_system_title
+            align: TOP_LEFT
+            x: 14
+            y: 12
+            text_font: font_text
+            text_color: 0xFFFFFF
+            text: "System"
+        - label:
+            id: lbl_system
+            align: TOP_LEFT
+            x: 14
+            y: 46
+            width: 292
+            long_mode: WRAP
+            text_font: font_small
+            text_color: 0xCBD5E1
+            text: ""
+        - button:
+            id: btn_restart
+            align: BOTTOM_RIGHT
+            x: -10
+            y: -8
+            width: 130
+            height: 34
+            pad_all: 2
+            bg_color: 0x1E293B
+            on_click:
+              # a touch by mistake should not restart: the first asks, a second within 4 s restarts
+              - lambda: |-
+                  if (id(restart_asked) != 0 && millis() - id(restart_asked) < 4000) {
+                    App.safe_reboot();
+                    return;
+                  }
+                  id(restart_asked) = millis();
+            widgets:
+              - label:
+                  id: lbl_restart_button
+                  align: CENTER
+                  text_font: font_small
+                  text_color: 0xFFFFFF
+                  text: "Neustart"
 
     # Tile pages: what is on them comes from ioBroker (actions tile_*, docs/TILES.md); a page without
     # tiles is skipped.
@@ -510,6 +812,12 @@ lvgl:
         - lambda: |-
             lv_slider_set_value(id(sl_brightness), int(id(lcd_brightness).state), LV_ANIM_OFF);
             lv_dropdown_set_selected(id(dd_language)->obj, id(display_language).active_index().value_or(0));
+            {
+              static const int steps[] = {0, 1, 5, 10, 30};
+              int m = int(id(screen_off_minutes).state), sel = 0;
+              for (int i = 0; i < 5; i++) if (steps[i] == m) sel = i;
+              lv_dropdown_set_selected(id(dd_screen_off)->obj, sel);
+            }
       widgets:
         - button:
             align: TOP_LEFT
@@ -532,17 +840,24 @@ lvgl:
                   text_color: 0xCBD5E1
                   text: "\U000F0141"
         - label:
+            id: lbl_settings_title
+            x: 56
+            y: 12
+            text_font: font_text
+            text_color: 0xFFFFFF
+            text: ""
+        - label:
             id: lbl_set_brightness
             x: 14
-            y: 62
+            y: 56
             text_font: font_small
             text_color: 0xCBD5E1
             text: ""
         - slider:
             id: sl_brightness
-            x: 14
-            y: 92
-            width: 292
+            x: 18
+            y: 86
+            width: 284
             height: 12
             min_value: 5
             max_value: 100
@@ -550,19 +865,54 @@ lvgl:
               - number.set:
                   id: lcd_brightness
                   value: !lambda return x;
+        # two rows: the name left, its list right
+        - label:
+            id: lbl_set_screen_off
+            x: 14
+            y: 128
+            width: 170
+            long_mode: DOT
+            text_font: font_small
+            text_color: 0xCBD5E1
+            text: ""
+        - dropdown:
+            id: dd_screen_off
+            x: 190
+            y: 116
+            width: 116
+            text_font: font_small
+            symbol: "\U000F0140"
+            indicator:
+              text_font: font_icons
+            dropdown_list:
+              text_font: font_small
+            options: ["-", "1 min", "5 min", "10 min", "30 min"]
+            on_change:
+              - number.set:
+                  id: screen_off_minutes
+                  value: !lambda |-
+                    static const int steps[] = {0, 1, 5, 10, 30};
+                    return steps[x < 5 ? x : 0];
         - label:
             id: lbl_set_language
             x: 14
-            y: 130
+            y: 182
+            width: 170
+            long_mode: DOT
             text_font: font_small
             text_color: 0xCBD5E1
             text: ""
         - dropdown:
             id: dd_language
-            x: 14
-            y: 158
-            width: 200
+            x: 190
+            y: 170
+            width: 116
             text_font: font_small
+            symbol: "\U000F0140"
+            indicator:
+              text_font: font_icons
+            dropdown_list:
+              text_font: font_small
             options: [Deutsch, English, Русский]
             on_change:
               - select.set_index:
@@ -597,6 +947,63 @@ interval:
           then:
             - lambda: id(back_to_clock) = true;
             - lvgl.page.show: page_clock
+      # dark after the time of the settings without a touch; the next touch wakes it (on_release)
+      - if:
+          condition:
+            lambda: |-
+              int m = int(id(screen_off_minutes).state);
+              return m > 0 && millis() - id(lcd_last_touch) > uint32_t(m) * 60000u;
+          then:
+            - if:
+                condition:
+                  not: lvgl.is_paused
+                then:
+                  - light.turn_off: lcd_backlight
+                  - lvgl.pause:
+      # the screen follows the board: a new landscape position counts after 2 s, so a turn in the hand does not flicker
+      - lambda: |-
+          static int seen = 90, since = 0, shown = 90;
+          float o = id(imu_orientation).state;
+          if (std::isnan(o)) return;
+          int angle = int(o + 0.5f);
+          if (angle != 90 && angle != 270) return;
+          uint32_t now = millis();
+          if (angle != seen) { seen = angle; since = now; return; }
+          if (angle != shown && now - uint32_t(since) > 2000) {
+            shown = angle;
+            id(lvgl_comp)->set_rotation(angle);
+            ESP_LOGI("panel", "Screen turned to %d degrees", angle);
+          }
+      # now playing: the bar at the bottom of the clock
+      - lambda: |-
+          using media_player::MediaPlayerState;
+          static bool shown_bar = false;
+          static int shown_play = -1;
+          static std::string shown_title = "-";
+          size_t lang = id(display_language).active_index().value_or(0) % 3;
+          auto mp_state = id(player)->state;
+          bool music = mp_state == MediaPlayerState::MEDIA_PLAYER_STATE_PLAYING ||
+                       mp_state == MediaPlayerState::MEDIA_PLAYER_STATE_PAUSED ||
+                       (shown_bar && mp_state == MediaPlayerState::MEDIA_PLAYER_STATE_ANNOUNCING);
+          if (music != shown_bar) {
+            shown_bar = music;
+            if (music) lv_obj_clear_flag(id(media_bar), LV_OBJ_FLAG_HIDDEN);
+            else lv_obj_add_flag(id(media_bar), LV_OBJ_FLAG_HIDDEN);
+            // time and date move up over the bar
+            lv_obj_align(id(lbl_time), LV_ALIGN_CENTER, 0, music ? -38 : -20);
+            lv_obj_align(id(lbl_date), LV_ALIGN_CENTER, 0, music ? 34 : 60);
+          }
+          int playing = mp_state == MediaPlayerState::MEDIA_PLAYER_STATE_PLAYING ? 1 : 0;
+          if (playing != shown_play) {
+            shown_play = playing;
+            lv_label_set_text(id(lbl_media_play), playing ? "\U000F03E4" : "\U000F040A");
+          }
+          static const char *const t_music[] = {"Musik", "Music", "Музыка"};
+          std::string title = id(media_title).empty() ? t_music[lang] : id(media_title);
+          if (title != shown_title) {
+            shown_title = title;
+            lv_label_set_text(id(lbl_media_title), title.c_str());
+          }
       # a tile page that lost its tiles: back to the clock
       - lambda: |-
           lvgl::LvPageType *pages[] = {id(page_tiles_1), id(page_tiles_2), id(page_tiles_3), id(page_tiles_4)};
@@ -640,12 +1047,75 @@ interval:
             return std::string(buf);
       - lambda: |-
           size_t lang = id(display_language).active_index().value_or(0) % 3;
+          static const char *const t_settings[] = {"Einstellungen", "Settings", "Настройки"};
           static const char *const t_bright[] = {"Helligkeit", "Brightness", "Яркость"};
+          static const char *const t_off[] = {"Bildschirm aus nach", "Screen off after", "Экран гаснет через"};
           static const char *const t_lang[] = {"Sprache", "Language", "Язык"};
+          lv_label_set_text(id(lbl_settings_title), t_settings[lang]);
           lv_label_set_text(id(lbl_set_brightness), t_bright[lang]);
+          lv_label_set_text(id(lbl_set_screen_off), t_off[lang]);
           lv_label_set_text(id(lbl_set_language), t_lang[lang]);
+          // the restart button: asks once, then waits 4 s for the second tap
+          static const char *const t_restart[] = {"Neustart", "Restart", "Перезапуск"};
+          static const char *const t_sure[] = {"Nochmal tippen", "Tap again", "Ещё раз"};
+          bool asking = id(restart_asked) != 0 && millis() - id(restart_asked) < 4000;
+          lv_label_set_text(id(lbl_restart_button), asking ? t_sure[lang] : t_restart[lang]);
+      # the system page, while it is shown
+      - if:
+          condition:
+            lambda: return id(page_system)->is_showing();
+          then:
+            - lambda: |-
+                size_t lang = id(display_language).active_index().value_or(0) % 3;
+                static const char *const t_up[] = {"Laufzeit", "Uptime", "Работает"};
+                static const char *const t_mem[] = {"Speicher frei", "Free memory", "Свободно"};
+                static const char *const t_iob[] = {"ioBroker", "ioBroker", "ioBroker"};
+                static const char *const t_yes[] = {"verbunden", "connected", "подключён"};
+                static const char *const t_no[] = {"getrennt", "disconnected", "нет связи"};
+                static const char *const t_title[] = {"System", "System", "Система"};
+                auto *wifi = wifi::global_wifi_component;
+                std::string ip = "-";
+                if (wifi->is_connected()) {
+                  for (auto &addr : wifi->get_ip_addresses()) {
+                    if (addr.is_ip4()) { char b[network::IP_ADDRESS_BUFFER_SIZE]; ip = addr.str_to(b); break; }
+                  }
+                }
+                uint32_t s = uint32_t(esp_timer_get_time() / 1000000ULL);
+                char up[32];
+                snprintf(up, sizeof(up), "%ud %02u:%02u", unsigned(s / 86400), unsigned(s / 3600 % 24), unsigned(s / 60 % 60));
+                char ssid[wifi::SSID_BUFFER_SIZE] = "-";
+                if (wifi->is_connected()) wifi->wifi_ssid_to(ssid);
+                #ifdef ESPHOME_PROJECT_VERSION
+                const char *firmware = ESPHOME_PROJECT_VERSION;
+                #else
+                const char *firmware = __DATE__;
+                #endif
+                char buf[400];
+                snprintf(buf, sizeof(buf),
+                         "Panel %s (ESPHome %s)\nWi-Fi: %s (%d dBm)\nIP: %s\n%s: %s\n%s: %u KB RAM, %u KB PSRAM\n%s: %s",
+                         firmware, ESPHOME_VERSION, ssid, int(wifi->wifi_rssi()), ip.c_str(), t_up[lang], up, t_mem[lang],
+                         unsigned(heap_caps_get_free_size(MALLOC_CAP_INTERNAL) / 1024),
+                         unsigned(heap_caps_get_free_size(MALLOC_CAP_SPIRAM) / 1024), t_iob[lang],
+                         api::global_api_server->is_connected() ? t_yes[lang] : t_no[lang]);
+                lv_label_set_text(id(lbl_system), buf);
+                lv_label_set_text(id(lbl_system_title), t_title[lang]);
 
 script:
+  # what the player does, to ioBroker (playing / paused / idle, volume 0..100)
+  - id: send_media_state
+    mode: queued
+    then:
+      - homeassistant.event:
+          event: esphome.media_state
+          data:
+            state: !lambda |-
+              switch (id(player)->state) {
+                case media_player::MEDIA_PLAYER_STATE_PLAYING: return std::string("playing");
+                case media_player::MEDIA_PLAYER_STATE_PAUSED: return std::string("paused");
+                case media_player::MEDIA_PLAYER_STATE_ANNOUNCING: return std::string("announcing");
+                default: return std::string("idle");
+              }
+            volume: !lambda return to_string(int(id(player)->volume * 100 + 0.5f));
   - id: show_tile_page
     parameters:
       page: int
