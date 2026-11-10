@@ -1,0 +1,686 @@
+###############################################################################
+# Waveshare ESP32-S3-Touch-LCD-2 (2 inch, 240x320 ST7789T3, touch CST816D) as a TILE PANEL for
+# ioBroker.satellite-display: no microphone and no speaker on this board, so no voice assistant.
+# Clock, up to four pages of tiles and the screen lock, the same components as the voice firmware
+# (components/tiles, components/screenlock; format docs/TILES.md). Landscape 320x240, like the 2.8 inch
+# display of the voice satellite, so the tiles and the editor of the adapter work unchanged.
+#
+# Pins (schematic ESP32-S3-Touch-LCD-2): LCD SCLK GPIO39, MOSI GPIO38, CS GPIO45, DC GPIO42, backlight GPIO1,
+# LCD reset on the BOOT net (GPIO0, not driven); touch and IMU on I2C SDA GPIO48, SCL GPIO47, touch INT
+# GPIO46; TF card MISO GPIO40, CS GPIO41; battery ADC GPIO5.
+#
+# Build: esphome run panel-lcd2.yaml (needs secrets.yaml with wifi_ssid / wifi_password).
+# Tested 2026-11-10 on the board: display (BGR), touch, tiles from the adapter, screen lock.
+###############################################################################
+
+substitutions:
+  name: sd-panel
+  friendly_name: "Tile Panel"
+  # Language of the clock and the keypad at the first start (Deutsch, English, Русский)
+  display_language: Deutsch
+  timezone: Europe/Berlin
+  build_path: .esphome/build/sd-panel
+
+esphome:
+  name: ${name}
+  friendly_name: ${friendly_name}
+  name_add_mac_suffix: true
+  min_version: 2026.10.0
+  # short on Windows: the paths of ESP-IDF in .esphome/build/... grow too long
+  build_path: ${build_path}
+  project:
+    name: sadam6752-tech.tile-panel-lcd2
+    version: 0.1.0-dev
+  on_boot:
+    - priority: -150
+      then:
+        - lambda: |-
+            tiles::Fonts fonts;
+            fonts.label = id(font_tile_label)->get_lv_font();
+            fonts.small = id(font_small)->get_lv_font();
+            fonts.medium = id(font_text)->get_lv_font();
+            fonts.large = id(font_value)->get_lv_font();
+            fonts.icons = id(font_icons)->get_lv_font();
+            fonts.icons_small = id(font_icons_small)->get_lv_font();
+            tiles::get().setup(id(page_tiles_1)->obj, id(page_tiles_2)->obj, id(page_tiles_3)->obj,
+                               id(page_tiles_4)->obj, fonts,
+                               [](int page, int slot, const char *input, float value) {
+                                 id(send_tile_input).execute(page, slot, std::string(input), value);
+                               });
+            screenlock::Fonts lock_fonts;
+            lock_fonts.digits = id(font_value)->get_lv_font();
+            lock_fonts.text = id(font_small)->get_lv_font();
+            lock_fonts.icons = id(font_icons)->get_lv_font();
+            screenlock::get().setup(lock_fonts, [](bool locked, int failed) {
+              id(send_lock_state).execute(locked, failed);
+            });
+        - light.turn_on:
+            id: lcd_backlight
+            brightness: !lambda return id(lcd_brightness).state / 100.0f;
+
+esp32:
+  board: esp32-s3-devkitc-1
+  variant: esp32s3
+  flash_size: 16MB
+  framework:
+    type: esp-idf
+
+psram:
+  mode: octal
+  speed: 80MHz
+
+logger:
+
+# Unencrypted like the voice satellite: ioBroker.satellite-display needs only the IP address.
+api:
+  # the panel keeps running when ioBroker is away
+  reboot_timeout: 0s
+  actions:
+    - action: tile_set
+      variables:
+        page: int
+        slot: int
+        col: int
+        row: int
+        size: string
+        type: string
+        label: string
+        unit: string
+        icon: string
+        decimals: int
+        min: float
+        max: float
+      then:
+        - lambda: tiles::get().set(page, slot, col, row, size, type, label, unit, icon, decimals, min, max);
+    - action: tile_value
+      variables:
+        page: int
+        slot: int
+        value: float
+      then:
+        - lambda: tiles::get().set_value(page, slot, value);
+    - action: tile_text
+      variables:
+        page: int
+        slot: int
+        value: string
+      then:
+        - lambda: tiles::get().set_text(page, slot, value);
+    - action: tile_state
+      variables:
+        page: int
+        slot: int
+        "on": bool
+      then:
+        - lambda: tiles::get().set_state(page, slot, on);
+    - action: tile_color
+      variables:
+        page: int
+        slot: int
+        color: int
+      then:
+        - lambda: tiles::get().set_color(page, slot, color);
+    - action: tile_background
+      variables:
+        page: int
+        slot: int
+        color: int
+      then:
+        - lambda: tiles::get().set_background(page, slot, color);
+    - action: tile_toggle
+      variables:
+        page: int
+        slot: int
+        show: bool
+      then:
+        - lambda: tiles::get().set_toggle(page, slot, show);
+    - action: tile_setpoint
+      variables:
+        page: int
+        slot: int
+        value: float
+        step: float
+      then:
+        - lambda: tiles::get().set_setpoint(page, slot, value, step);
+    - action: tile_history
+      variables:
+        page: int
+        slot: int
+        points: float[]
+      then:
+        - lambda: |-
+            std::vector<float> values;
+            for (size_t i = 0; i < points.size(); i++) values.push_back(points[i]);
+            tiles::get().set_history(page, slot, values);
+    - action: tile_clear
+      variables:
+        page: int
+      then:
+        - lambda: tiles::get().clear(page);
+    # Screen lock (docs/TILES.md "Screen lock"): pin_hash = SHA-256 of "satellite-display:" + PIN, 64 hex digits;
+    # mode 0 = after `minutes` without a touch, 1 = when the display goes back to the clock, 2 = only by hand.
+    - action: lock_config
+      variables:
+        enabled: bool
+        pin_hash: string
+        length: int
+        mode: int
+        minutes: int
+      then:
+        - lambda: screenlock::get().configure(enabled, pin_hash, length, mode, minutes);
+    - action: lock_set
+      variables:
+        locked: bool
+      then:
+        - lambda: screenlock::get().set_locked(locked);
+
+ota:
+  - platform: esphome
+    id: ota_esphome
+
+wifi:
+  ssid: !secret wifi_ssid
+  password: !secret wifi_password
+  ap:
+    ssid: "Tile Panel Setup"
+
+captive_portal:
+
+time:
+  - platform: sntp
+    id: rtc
+    timezone: ${timezone}
+
+external_components:
+  - source:
+      type: local
+      path: components
+    components: [tiles, screenlock]
+
+# Tile pages (components/tiles, docs/TILES.md).
+tiles:
+
+# Screen lock with a PIN, set from ioBroker (components/screenlock).
+screenlock:
+
+spi:
+  - id: lcd_spi
+    clk_pin: GPIO39
+    mosi_pin: GPIO38
+    miso_pin: GPIO40
+    interface: hardware
+
+i2c:
+  - id: bus_i2c
+    sda: GPIO48
+    scl: GPIO47
+    frequency: 400kHz
+
+display:
+  - platform: mipi_spi
+    id: lcd
+    model: ST7789V
+    spi_id: lcd_spi
+    cs_pin: GPIO45
+    dc_pin: GPIO42
+    data_rate: 40MHz
+    invert_colors: true
+    # this panel takes blue first, like the 2.8 inch one (with rgb the blue accent came out orange)
+    color_order: bgr
+    dimensions:
+      width: 240
+      height: 320
+    auto_clear_enabled: false
+    update_interval: never
+
+touchscreen:
+  - platform: cst816
+    id: touch
+    display: lcd
+    i2c_id: bus_i2c
+    interrupt_pin: GPIO46
+    on_touch:
+      - lambda: id(lcd_last_touch) = millis();
+      - logger.log:
+          level: DEBUG
+          format: "touch x=%d y=%d"
+          args: [touch.x, touch.y]
+
+output:
+  - platform: ledc
+    id: lcd_backlight_pwm
+    pin: GPIO1
+    frequency: 20kHz
+
+light:
+  - platform: monochromatic
+    id: lcd_backlight
+    internal: true
+    output: lcd_backlight_pwm
+    restore_mode: ALWAYS_ON
+    default_transition_length: 300ms
+
+select:
+  # Read by the lambdas only (no on_value: a restored select fires it during setup).
+  - platform: template
+    id: display_language
+    name: "Display language"
+    icon: "mdi:translate"
+    entity_category: config
+    optimistic: true
+    restore_value: true
+    initial_option: "${display_language}"
+    options: [Deutsch, English, Русский]
+
+number:
+  - platform: template
+    id: lcd_brightness
+    name: "Display brightness"
+    icon: "mdi:brightness-6"
+    entity_category: config
+    optimistic: true
+    restore_value: true
+    initial_value: 80
+    min_value: 5
+    max_value: 100
+    step: 5
+    unit_of_measurement: "%"
+    on_value:
+      - light.turn_on:
+          id: lcd_backlight
+          brightness: !lambda return x / 100.0f;
+
+globals:
+  - id: lcd_last_touch
+    type: uint32_t
+    restore_value: false
+    initial_value: '0'
+  # the display just went back to the clock by itself (for the screen lock)
+  - id: back_to_clock
+    type: bool
+    restore_value: false
+    initial_value: 'false'
+
+font:
+  - file: "gfonts://Roboto@500"
+    id: font_clock
+    size: 96
+    glyphs: "0123456789:"
+  - file: "gfonts://Roboto@500"
+    id: font_value
+    size: 34
+    glyphsets: [GF_Latin_Core, GF_Cyrillic_Core]
+  - file: "gfonts://Roboto"
+    id: font_date
+    size: 24
+    glyphsets: [GF_Latin_Core, GF_Cyrillic_Core]
+  - file: "gfonts://Roboto"
+    id: font_text
+    size: 22
+    glyphsets: [GF_Latin_Core, GF_Cyrillic_Core]
+  - file: "gfonts://Roboto"
+    id: font_small
+    size: 18
+    glyphsets: [GF_Latin_Core, GF_Cyrillic_Core]
+  # names of the tiles
+  - file: "gfonts://Roboto"
+    id: font_tile_label
+    size: 15
+    glyphsets: [GF_Latin_Core, GF_Cyrillic_Core]
+  # Icons (Material Design Icons): microphone, microphone-off, dots, volume-high, wifi-off, lan-disconnect,
+  # alert-circle, cog, chevron-left, alarm, wifi, play, pause, stop, volume, then the icons of the tiles
+  # (the list in components/tiles/tiles.cpp and docs/TILES.md).
+  - file: "https://cdn.jsdelivr.net/npm/@mdi/font@7.4.47/fonts/materialdesignicons-webfont.ttf"
+    id: font_icons
+    size: 30
+    glyphs: ["\U000F036C", "\U000F036D", "\U000F01D8", "\U000F057E", "\U000F05AA", "\U000F0319", "\U000F0028",
+             "\U000F0493", "\U000F0141", "\U000F0020", "\U000F05A9",
+             "\U000F040A", "\U000F03E4", "\U000F04DB", "\U000F075E", "\U000F075D",
+             "\U000F0335", "\U000F06B5", "\U000F0769", "\U000F06A5", "\U000F0425", "\U000F0210", "\U000F0438", "\U000F050F",
+             "\U000F058E", "\U000F0241", "\U000F0A72", "\U000F0079", "\U000F05AE", "\U000F05B1", "\U000F081A", "\U000F06D9",
+             "\U000F00AC", "\U000F033E", "\U000F033F", "\U000F009A", "\U000F0502", "\U000F0381", "\U000F075A", "\U000F04C3",
+             "\U000F0176", "\U000F072A", "\U000F0AAC", "\U000F010B", "\U000F02DC", "\U000F02E3", "\U000F04B9", "\U000F09A0",
+             "\U000F0599", "\U000F0594", "\U000F012C", "\U000F0156",
+             "\U000F0374", "\U000F0415", "\U000F006E"]
+  # minus and plus of a square thermostat tile, smaller
+  - file: "https://cdn.jsdelivr.net/npm/@mdi/font@7.4.47/fonts/materialdesignicons-webfont.ttf"
+    id: font_icons_small
+    size: 20
+    glyphs: ["\U000F0374", "\U000F0415"]
+
+lvgl:
+  id: lvgl_comp
+  displays: [lcd]
+  touchscreens: [touch]
+  rotation: 90
+  buffer_size: 25%
+  theme:
+    slider:
+      bg_color: 0x334155
+      indicator:
+        bg_color: 0x38BDF8
+      knob:
+        bg_color: 0xFFFFFF
+  pages:
+    - id: page_clock
+      bg_color: 0x000000
+      scrollable: false
+      on_swipe_left:
+        - lambda: if (!screenlock::get().locked()) id(show_tile_page).execute(tiles::get().next_page(0, 1), true);
+      widgets:
+        - button:
+            id: btn_settings
+            align: TOP_LEFT
+            x: 2
+            y: 2
+            width: 48
+            height: 44
+            bg_opa: TRANSP
+            shadow_width: 0
+            border_width: 0
+            on_click:
+              - lvgl.page.show:
+                  id: page_settings
+                  animation: FADE_IN
+                  time: 150ms
+            widgets:
+              - label:
+                  align: CENTER
+                  text_font: font_icons
+                  text_color: 0x64748B
+                  text: "\U000F0493"
+        - button:
+            id: btn_lock
+            hidden: true
+            align: TOP_LEFT
+            x: 50
+            y: 2
+            width: 48
+            height: 44
+            bg_opa: TRANSP
+            shadow_width: 0
+            border_width: 0
+            on_click:
+              - lambda: screenlock::get().set_locked(true);
+            widgets:
+              - label:
+                  align: CENTER
+                  text_font: font_icons
+                  text_color: 0x64748B
+                  text: "\U000F033F"
+        - label:
+            id: lbl_locked
+            hidden: true
+            align: TOP_LEFT
+            x: 11
+            y: 9
+            text_font: font_icons
+            text_color: 0x64748B
+            text: "\U000F033E"
+        - label:
+            id: lbl_time
+            align: CENTER
+            y: -20
+            text_font: font_clock
+            text_color: 0xFFFFFF
+            text: "--:--"
+        - label:
+            id: lbl_date
+            align: CENTER
+            y: 60
+            width: 100%
+            long_mode: DOT
+            text_align: CENTER
+            text_font: font_date
+            text_color: 0xA0A0A0
+            text: ""
+        # last widget, so it lies over all others: while locked a touch opens the keypad
+        - obj:
+            id: lock_catcher
+            hidden: true
+            x: 0
+            y: 0
+            width: 100%
+            height: 100%
+            bg_opa: TRANSP
+            border_width: 0
+            radius: 0
+            scrollable: false
+            on_press:
+              - lambda: screenlock::get().on_clock_touched();
+
+    # Tile pages: what is on them comes from ioBroker (actions tile_*, docs/TILES.md); a page without
+    # tiles is skipped.
+    - id: page_tiles_1
+      bg_color: 0x000000
+      scrollable: false
+      on_swipe_left:
+        - lambda: |-
+            int p = tiles::get().next_page(1, 1);
+            if (p != 0) id(show_tile_page).execute(p, true);
+      on_swipe_right:
+        - lambda: id(show_tile_page).execute(tiles::get().next_page(1, -1), false);
+      widgets:
+        - arc:
+            hidden: true
+        - line:
+            hidden: true
+            points: ["0, 0", "1, 1"]
+        # the tiles make switches and bars at run time: one hidden each, so that LVGL compiles them in
+        - switch:
+            hidden: true
+        - bar:
+            hidden: true
+
+    - id: page_tiles_2
+      bg_color: 0x000000
+      scrollable: false
+      on_swipe_left:
+        - lambda: |-
+            int p = tiles::get().next_page(2, 1);
+            if (p != 0) id(show_tile_page).execute(p, true);
+      on_swipe_right:
+        - lambda: id(show_tile_page).execute(tiles::get().next_page(2, -1), false);
+
+    - id: page_tiles_3
+      bg_color: 0x000000
+      scrollable: false
+      on_swipe_left:
+        - lambda: |-
+            int p = tiles::get().next_page(3, 1);
+            if (p != 0) id(show_tile_page).execute(p, true);
+      on_swipe_right:
+        - lambda: id(show_tile_page).execute(tiles::get().next_page(3, -1), false);
+
+    - id: page_tiles_4
+      bg_color: 0x000000
+      scrollable: false
+      on_swipe_left:
+        - lambda: |-
+            int p = tiles::get().next_page(4, 1);
+            if (p != 0) id(show_tile_page).execute(p, true);
+      on_swipe_right:
+        - lambda: id(show_tile_page).execute(tiles::get().next_page(4, -1), false);
+
+
+    - id: page_settings
+      bg_color: 0x000000
+      scrollable: false
+      on_load:
+        - lambda: |-
+            lv_slider_set_value(id(sl_brightness), int(id(lcd_brightness).state), LV_ANIM_OFF);
+            lv_dropdown_set_selected(id(dd_language)->obj, id(display_language).active_index().value_or(0));
+      widgets:
+        - button:
+            align: TOP_LEFT
+            x: 2
+            y: 2
+            width: 48
+            height: 44
+            bg_opa: TRANSP
+            shadow_width: 0
+            border_width: 0
+            on_click:
+              - lvgl.page.show:
+                  id: page_clock
+                  animation: FADE_IN
+                  time: 150ms
+            widgets:
+              - label:
+                  align: CENTER
+                  text_font: font_icons
+                  text_color: 0xCBD5E1
+                  text: "\U000F0141"
+        - label:
+            id: lbl_set_brightness
+            x: 14
+            y: 62
+            text_font: font_small
+            text_color: 0xCBD5E1
+            text: ""
+        - slider:
+            id: sl_brightness
+            x: 14
+            y: 92
+            width: 292
+            height: 12
+            min_value: 5
+            max_value: 100
+            on_release:
+              - number.set:
+                  id: lcd_brightness
+                  value: !lambda return x;
+        - label:
+            id: lbl_set_language
+            x: 14
+            y: 130
+            text_font: font_small
+            text_color: 0xCBD5E1
+            text: ""
+        - dropdown:
+            id: dd_language
+            x: 14
+            y: 158
+            width: 200
+            text_font: font_small
+            options: [Deutsch, English, Русский]
+            on_change:
+              - select.set_index:
+                  id: display_language
+                  index: !lambda return x;
+
+interval:
+  - interval: 250ms
+    then:
+      # Screen lock: keypad timeout, relock, the icons; a locked display shows only the clock.
+      - lambda: |-
+          auto &lock = screenlock::get();
+          size_t lock_lang = id(display_language).active_index().value_or(0) % 3;
+          lock.tick(millis() - id(lcd_last_touch), id(back_to_clock), lock_lang);
+          id(back_to_clock) = false;
+          bool locked = lock.locked();
+          auto show = [](lv_obj_t *o, bool visible) {
+            if (visible) lv_obj_remove_flag(o, LV_OBJ_FLAG_HIDDEN);
+            else lv_obj_add_flag(o, LV_OBJ_FLAG_HIDDEN);
+          };
+          show(id(btn_settings), !locked);
+          show(id(lbl_locked), locked);
+          show(id(btn_lock), lock.enabled() && !locked);
+          show(id(lock_catcher), locked);
+          if (locked && !id(page_clock)->is_showing()) {
+            id(lvgl_comp)->show_page(id(page_clock)->index, LV_SCREEN_LOAD_ANIM_NONE, 0);
+          }
+      # other pages fall back to the clock after a minute without a touch
+      - if:
+          condition:
+            lambda: return !id(page_clock)->is_showing() && millis() - id(lcd_last_touch) > 60000;
+          then:
+            - lambda: id(back_to_clock) = true;
+            - lvgl.page.show: page_clock
+      # a tile page that lost its tiles: back to the clock
+      - lambda: |-
+          lvgl::LvPageType *pages[] = {id(page_tiles_1), id(page_tiles_2), id(page_tiles_3), id(page_tiles_4)};
+          for (int p = 1; p <= 4; p++) {
+            if (pages[p - 1]->is_showing() && !tiles::get().page_used(p)) id(show_tile_page).execute(0, false);
+          }
+  - interval: 1s
+    then:
+      - lvgl.label.update:
+          id: lbl_time
+          text: !lambda |-
+            auto now = id(rtc).now();
+            if (!now.is_valid()) return std::string("--:--");
+            char buf[6];
+            snprintf(buf, sizeof(buf), "%02d:%02d", now.hour, now.minute);
+            return std::string(buf);
+      - lvgl.label.update:
+          id: lbl_date
+          text: !lambda |-
+            static const char *const days[3][7] = {
+                {"Sonntag", "Montag", "Dienstag", "Mittwoch", "Donnerstag", "Freitag", "Samstag"},
+                {"Sunday", "Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday"},
+                {"воскресенье", "понедельник", "вторник", "среда", "четверг", "пятница", "суббота"}};
+            static const char *const months[3][12] = {
+                {"Januar", "Februar", "März", "April", "Mai", "Juni", "Juli", "August", "September", "Oktober",
+                 "November", "Dezember"},
+                {"January", "February", "March", "April", "May", "June", "July", "August", "September", "October",
+                 "November", "December"},
+                {"января", "февраля", "марта", "апреля", "мая", "июня", "июля", "августа", "сентября", "октября",
+                 "ноября", "декабря"}};
+            auto now = id(rtc).now();
+            if (!now.is_valid()) return std::string("");
+            size_t lang = id(display_language).active_index().value_or(0) % 3;
+            const char *day = days[lang][now.day_of_week - 1];
+            const char *month = months[lang][now.month - 1];
+            char buf[64];
+            // without the year: "Donnerstag, 30. September 2026" does not fit 320 px
+            if (lang == 0) snprintf(buf, sizeof(buf), "%s, %d. %s", day, now.day_of_month, month);
+            else if (lang == 1) snprintf(buf, sizeof(buf), "%s, %s %d", day, month, now.day_of_month);
+            else snprintf(buf, sizeof(buf), "%s, %d %s", day, now.day_of_month, month);
+            return std::string(buf);
+      - lambda: |-
+          size_t lang = id(display_language).active_index().value_or(0) % 3;
+          static const char *const t_bright[] = {"Helligkeit", "Brightness", "Яркость"};
+          static const char *const t_lang[] = {"Sprache", "Language", "Язык"};
+          lv_label_set_text(id(lbl_set_brightness), t_bright[lang]);
+          lv_label_set_text(id(lbl_set_language), t_lang[lang]);
+
+script:
+  - id: show_tile_page
+    parameters:
+      page: int
+      left: bool
+    then:
+      - lambda: |-
+          lvgl::LvPageType *pages[] = {id(page_clock), id(page_tiles_1), id(page_tiles_2), id(page_tiles_3),
+                                 id(page_tiles_4)};
+          if (page < 0 || page > 4) return;
+          id(lvgl_comp)->show_page(pages[page]->index,
+                                   left ? LV_SCREEN_LOAD_ANIM_MOVE_LEFT : LV_SCREEN_LOAD_ANIM_MOVE_RIGHT, 200);
+  # The screen lock changed or a PIN was wrong, to ioBroker (ioBroker.satellite-display).
+  - id: send_lock_state
+    mode: queued
+    parameters:
+      locked: bool
+      failed: int
+    then:
+      - homeassistant.event:
+          event: esphome.screen_lock
+          data:
+            locked: !lambda 'return std::string(locked ? "1" : "0");'
+            failed: !lambda return to_string(failed);
+  # A touch on a tile, to ioBroker (ioBroker.satellite-display); docs/TILES.md.
+  - id: send_tile_input
+    parameters:
+      page: int
+      slot: int
+      input: string
+      value: float
+    then:
+      - homeassistant.event:
+          event: esphome.tile_input
+          data:
+            page: !lambda return to_string(page);
+            slot: !lambda return to_string(slot);
+            input: !lambda return input;
+            value: !lambda return str_sprintf("%g", value);

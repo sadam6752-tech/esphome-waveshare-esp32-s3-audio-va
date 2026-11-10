@@ -96,6 +96,8 @@ System  ◀─ swipe ─  Clock  ─ swipe ▶  Tiles 1 ▶ 2 ▶ 3 ▶ 4       
   and **Neustart** (restart, asks first).
 - **Tiles:** up to four pages of tiles from ioBroker - values, gauges, bars, charts, switches, dimmers,
   buttons and thermostats (see [Tile pages](#tile-pages)). A page without tiles is skipped.
+- **Screen lock:** with a PIN set in ioBroker the display shows only the clock and a lock and the wake word is
+  ignored until the PIN is typed (see [Screen lock](#screen-lock)).
 - **Settings:** volume, display brightness by day and at night, LED ring, microphone gain (dB), microphone off,
   night mode, wake sound, language, Wi-Fi.
 
@@ -127,6 +129,36 @@ actions `tile_*` and the event `esphome.tile_input`) is in [docs/TILES.md](docs/
 
 Firmware 2.0.0 replaced the fixed values and switches pages (`value_1` ... `value_4`, `switch_1` ... `switch_4`
 and their labels) with the tile pages.
+
+### Screen lock
+
+Since 2.1.0 the display can be locked with a PIN of 4 to 6 digits, set per satellite in ioBroker.satellite-display.
+While locked it shows only the clock and the date and a lock instead of the gear, swipes do nothing and the wake
+word is ignored (alarms, timers, announcements and music still sound). A touch opens a keypad; after 5 wrong PINs in
+a row it waits a minute. The satellite gets only a SHA-256 hash of the PIN and keeps it in flash, so the lock also
+works after a restart and without ioBroker. When it locks again (after some minutes, when the display goes back to
+the clock, or only by hand with the open lock next to the gear) is set in the adapter. Format in
+[docs/TILES.md](docs/TILES.md#screen-lock-210).
+
+### Tile panel without voice (Waveshare ESP32-S3-Touch-LCD-2)
+
+[`panel-lcd2.yaml`](panel-lcd2.yaml) turns the
+[Waveshare ESP32-S3-Touch-LCD-2](https://www.waveshare.com/wiki/ESP32-S3-Touch-LCD-2) (2 inch, 240x320, touch
+CST816D) into a wall or desk panel for ioBroker.satellite-display: the clock, the four pages of tiles and the screen
+lock, plus a settings page for brightness and language. The board has no microphone and no speaker, so there is no
+voice assistant on it. Its screen runs in landscape 320x240 like the 2.8 inch display, so the tiles and the editor of
+the adapter work unchanged; add the panel in the adapter like a satellite (IP address, port 6053). The time comes
+from the network (SNTP), the board has no clock chip.
+
+There is no ready-made image of the panel yet. Build it with a `secrets.yaml` (Wi-Fi) and flash it the first time
+over USB, later over Wi-Fi:
+
+```bash
+esphome -s build_path C:/ESPHome/build/panel run panel-lcd2.yaml
+```
+
+The short `build_path` is needed on Windows (the paths of ESP-IDF get too long in `.esphome/build`). Without a
+reachable Wi-Fi the panel opens the access point "Tile Panel Setup".
 
 ## Reminders (with pi-agent)
 

@@ -1,5 +1,11 @@
 # Changelog
 
+## [Unreleased]
+
+### Added
+- **Tile panel without voice:** `panel-lcd2.yaml` for the Waveshare ESP32-S3-Touch-LCD-2 (2 inch, 240x320, CST816D):
+  clock, four pages of tiles, screen lock, brightness and language, time over SNTP. No ready-made image yet.
+
 ## [2.1.0] - 2026-11-10
 
 ### Added
