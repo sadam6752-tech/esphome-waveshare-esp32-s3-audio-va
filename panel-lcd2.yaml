@@ -467,11 +467,6 @@ globals:
   - id: media_title
     type: std::string
     restore_value: false
-  # restart asked once on the system page (a second tap within 4 s restarts)
-  - id: restart_asked
-    type: uint32_t
-    restore_value: false
-    initial_value: '0'
   # the display just went back to the clock by itself (for the screen lock)
   - id: back_to_clock
     type: bool
@@ -732,6 +727,7 @@ lvgl:
       bg_color: 0x000000
       scrollable: false
       on_swipe_left:
+        - lvgl.widget.hide: restart_dialog
         - lvgl.page.show:
             id: page_clock
             animation: MOVE_LEFT
@@ -765,13 +761,8 @@ lvgl:
             pad_all: 2
             bg_color: 0x1E293B
             on_click:
-              # a touch by mistake should not restart: the first asks, a second within 4 s restarts
-              - lambda: |-
-                  if (id(restart_asked) != 0 && millis() - id(restart_asked) < 4000) {
-                    App.safe_reboot();
-                    return;
-                  }
-                  id(restart_asked) = millis();
+              # a touch by mistake should not restart: ask with Ja / Nein first
+              - lvgl.widget.show: restart_dialog
             widgets:
               - label:
                   id: lbl_restart_button
@@ -779,6 +770,71 @@ lvgl:
                   text_font: font_small
                   text_color: 0xFFFFFF
                   text: "Neustart"
+        # The question before a restart, as on the voice satellite (base/display.yaml): Ja restarts, Nein or a
+        # swipe closes it.
+        - obj:
+            id: restart_dialog
+            hidden: true
+            align: CENTER
+            width: 100%
+            height: 100%
+            bg_color: 0x101828
+            bg_opa: COVER
+            border_width: 0
+            radius: 0
+            pad_all: 14
+            scrollable: false
+            widgets:
+              - label:
+                  id: lbl_restart_question
+                  align: TOP_MID
+                  y: 20
+                  width: 100%
+                  long_mode: WRAP
+                  text_align: CENTER
+                  text_font: font_text
+                  text_color: 0xFFFFFF
+                  text: "Gerät jetzt neu starten?"
+              - button:
+                  id: btn_restart_yes
+                  align: BOTTOM_LEFT
+                  x: 10
+                  width: 130
+                  height: 48
+                  bg_color: 0x15803D
+                  on_click:
+                    - lambda: |-
+                        size_t lang = id(display_language).active_index().value_or(0) % 3;
+                        static const char *const t_rs[] = {"Neustart ...", "Restarting ...", "Перезапуск ..."};
+                        lv_label_set_text(id(lbl_restart_question), t_rs[lang]);
+                        lv_obj_add_flag(id(btn_restart_yes), LV_OBJ_FLAG_HIDDEN);
+                        lv_obj_add_flag(id(btn_restart_no), LV_OBJ_FLAG_HIDDEN);
+                        lv_refr_now(nullptr);
+                    - delay: 1s
+                    - lambda: App.safe_reboot();
+                  widgets:
+                    - label:
+                        id: lbl_restart_yes
+                        align: CENTER
+                        text_font: font_text
+                        text_color: 0xFFFFFF
+                        text: "Ja"
+              - button:
+                  id: btn_restart_no
+                  align: BOTTOM_RIGHT
+                  x: -10
+                  width: 130
+                  height: 48
+                  bg_color: 0x334155
+                  on_click:
+                    - lvgl.widget.hide: restart_dialog
+                  widgets:
+                    - label:
+                        id: lbl_restart_no
+                        align: CENTER
+                        text_font: font_text
+                        text_color: 0xFFFFFF
+                        text: "Nein"
 
     # Tile pages: what is on them comes from ioBroker (actions tile_*, docs/TILES.md); a page without
     # tiles is skipped.
@@ -1095,11 +1151,17 @@ interval:
           lv_label_set_text(id(lbl_set_brightness), t_bright[lang]);
           lv_label_set_text(id(lbl_set_screen_off), t_off[lang]);
           lv_label_set_text(id(lbl_set_language), t_lang[lang]);
-          // the restart button: asks once, then waits 4 s for the second tap
+          // the restart button and its question
           static const char *const t_restart[] = {"Neustart", "Restart", "Перезапуск"};
-          static const char *const t_sure[] = {"Nochmal tippen", "Tap again", "Ещё раз"};
-          bool asking = id(restart_asked) != 0 && millis() - id(restart_asked) < 4000;
-          lv_label_set_text(id(lbl_restart_button), asking ? t_sure[lang] : t_restart[lang]);
+          static const char *const t_question[] = {"Gerät jetzt neu starten?", "Restart the device now?",
+                                                   "Перезапустить устройство сейчас?"};
+          static const char *const t_yes[] = {"Ja", "Yes", "Да"};
+          static const char *const t_no[] = {"Nein", "No", "Нет"};
+          lv_label_set_text(id(lbl_restart_button), t_restart[lang]);
+          if (!lv_obj_has_flag(id(btn_restart_yes), LV_OBJ_FLAG_HIDDEN))
+            lv_label_set_text(id(lbl_restart_question), t_question[lang]);
+          lv_label_set_text(id(lbl_restart_yes), t_yes[lang]);
+          lv_label_set_text(id(lbl_restart_no), t_no[lang]);
       # the system page, while it is shown
       - if:
           condition:
