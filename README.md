@@ -162,9 +162,11 @@ from the network (SNTP), the board has no clock chip.
 
 **Install:** on the [install page](https://sadam6752-tech.github.io/esphome-waveshare-esp32-s3-audio-va/), card
 *Tile panel*, with Chrome or Edge over USB. Right after flashing the page offers to set up Wi-Fi; without a reachable
-Wi-Fi the panel opens the access point "Tile Panel Setup". Then add it in ioBroker.satellite-display. A newer release
-installs the same way (without erasing, the Wi-Fi stays); the ready-made firmware also has an update entity
-"Firmware" that points at the GitHub releases.
+Wi-Fi the panel opens the access point "Tile Panel Setup". Then add it in ioBroker.satellite-display. Updates: when
+a newer release is out, the system page (swipe right from the clock) shows a button **Update &lt;version&gt;**; after
+Ja the panel downloads it from GitHub and restarts (it checks every 6 hours and after a restart). A panel built
+yourself from `panel-lcd2.yaml` has no such button; flash the ready-made firmware once over USB from the install
+page to get it (set up Wi-Fi again in the browser right after).
 
 To build it yourself instead, use a `secrets.yaml` (Wi-Fi) and flash it the first time over USB, later over Wi-Fi:
 

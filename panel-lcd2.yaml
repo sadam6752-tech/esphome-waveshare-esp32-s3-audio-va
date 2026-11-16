@@ -467,6 +467,16 @@ globals:
   - id: media_title
     type: std::string
     restore_value: false
+  # the question on the system page is about the firmware update (Ja installs it), else about a restart
+  - id: confirm_update
+    type: bool
+    restore_value: false
+    initial_value: 'false'
+  # the update from the question runs; the update entity going back to "available" means it failed
+  - id: update_started
+    type: bool
+    restore_value: false
+    initial_value: 'false'
   # the display just went back to the clock by itself (for the screen lock)
   - id: back_to_clock
     type: bool
@@ -722,7 +732,8 @@ lvgl:
             on_press:
               - lambda: screenlock::get().on_clock_touched();
 
-    # System: firmware, Wi-Fi, IP, uptime, memory, connection to ioBroker, restart.
+    # System: firmware, Wi-Fi, IP, uptime, memory, connection to ioBroker, restart, and the firmware update
+    # (only the ready-made firmware, release-panel.yaml, has the update entity; the button shows a newer release).
     - id: page_system
       bg_color: 0x000000
       scrollable: false
@@ -762,7 +773,8 @@ lvgl:
             bg_color: 0x1E293B
             on_click:
               # a touch by mistake should not restart: ask with Ja / Nein first
-              - lvgl.widget.show: restart_dialog
+              - lambda: id(confirm_update) = false;
+              - script.execute: show_question
             widgets:
               - label:
                   id: lbl_restart_button
@@ -770,8 +782,29 @@ lvgl:
                   text_font: font_small
                   text_color: 0xFFFFFF
                   text: "Neustart"
-        # The question before a restart, as on the voice satellite (base/display.yaml): Ja restarts, Nein or a
-        # swipe closes it.
+        # A newer release (update entity "Firmware" of release-panel.yaml): asks first, like the restart.
+        - button:
+            id: btn_update
+            hidden: true
+            align: BOTTOM_LEFT
+            x: 10
+            y: -8
+            width: 150
+            height: 34
+            pad_all: 2
+            bg_color: 0x1D4ED8
+            on_click:
+              - lambda: id(confirm_update) = true;
+              - script.execute: show_question
+            widgets:
+              - label:
+                  id: lbl_update_button
+                  align: CENTER
+                  text_font: font_small
+                  text_color: 0xFFFFFF
+                  text: "Update"
+        # The question before a restart or an update, as on the voice satellite (base/display.yaml): Ja restarts
+        # or installs, Nein or a swipe closes it.
         - obj:
             id: restart_dialog
             hidden: true
@@ -806,12 +839,29 @@ lvgl:
                     - lambda: |-
                         size_t lang = id(display_language).active_index().value_or(0) % 3;
                         static const char *const t_rs[] = {"Neustart ...", "Restarting ...", "Перезапуск ..."};
-                        lv_label_set_text(id(lbl_restart_question), t_rs[lang]);
+                        // the download blocks the display: the text stays until the panel restarts by itself
+                        static const char *const t_up[] = {"Update wird installiert, bitte nicht ausschalten ...",
+                                                           "Installing the update, do not switch off ...",
+                                                           "Обновление устанавливается, не выключайте ..."};
+                        lv_label_set_text(id(lbl_restart_question), id(confirm_update) ? t_up[lang] : t_rs[lang]);
                         lv_obj_add_flag(id(btn_restart_yes), LV_OBJ_FLAG_HIDDEN);
                         lv_obj_add_flag(id(btn_restart_no), LV_OBJ_FLAG_HIDDEN);
                         lv_refr_now(nullptr);
-                    - delay: 1s
-                    - lambda: App.safe_reboot();
+                    - if:
+                        condition:
+                          lambda: return id(confirm_update);
+                        then:
+                          - delay: 300ms
+                          - lambda: |-
+                              id(update_started) = true;
+                              #ifdef USE_UPDATE
+                              for (auto *u : App.get_updates()) {
+                                if (u->state == update::UPDATE_STATE_AVAILABLE) u->perform();
+                              }
+                              #endif
+                        else:
+                          - delay: 1s
+                          - lambda: App.safe_reboot();
                   widgets:
                     - label:
                         id: lbl_restart_yes
@@ -1158,8 +1208,10 @@ interval:
           static const char *const t_yes[] = {"Ja", "Yes", "Да"};
           static const char *const t_no[] = {"Nein", "No", "Нет"};
           lv_label_set_text(id(lbl_restart_button), t_restart[lang]);
-          if (!lv_obj_has_flag(id(btn_restart_yes), LV_OBJ_FLAG_HIDDEN))
-            lv_label_set_text(id(lbl_restart_question), t_question[lang]);
+          if (!lv_obj_has_flag(id(btn_restart_yes), LV_OBJ_FLAG_HIDDEN)) {
+            if (id(confirm_update)) id(update_question_text).execute();
+            else lv_label_set_text(id(lbl_restart_question), t_question[lang]);
+          }
           lv_label_set_text(id(lbl_restart_yes), t_yes[lang]);
           lv_label_set_text(id(lbl_restart_no), t_no[lang]);
       # the system page, while it is shown
@@ -1201,8 +1253,57 @@ interval:
                          api::global_api_server->is_connected() ? t_yes[lang] : t_no[lang]);
                 lv_label_set_text(id(lbl_system), buf);
                 lv_label_set_text(id(lbl_system_title), t_title[lang]);
+                // the firmware update (only in release-panel.yaml)
+                #ifdef USE_UPDATE
+                static const char *const t_fail[] = {"Update fehlgeschlagen. Später erneut versuchen.",
+                                                     "The update failed. Try again later.",
+                                                     "Обновление не удалось. Попробуйте позже."};
+                for (auto *u : App.get_updates()) {
+                  bool available = u->state == update::UPDATE_STATE_AVAILABLE;
+                  if (id(update_started) && available) {
+                    // back to "available" after perform(): the download or the flashing failed
+                    id(update_started) = false;
+                    lv_label_set_text(id(lbl_restart_question), t_fail[lang]);
+                    lv_obj_clear_flag(id(btn_restart_no), LV_OBJ_FLAG_HIDDEN);
+                  }
+                  if (available && !id(update_started)) {
+                    std::string text = "Update " + u->update_info.latest_version;
+                    lv_label_set_text(id(lbl_update_button), text.c_str());
+                    lv_obj_clear_flag(id(btn_update), LV_OBJ_FLAG_HIDDEN);
+                  } else {
+                    lv_obj_add_flag(id(btn_update), LV_OBJ_FLAG_HIDDEN);
+                  }
+                  break;
+                }
+                #endif
 
 script:
+  # The question of the system page, for a restart or (confirm_update) the firmware update.
+  - id: show_question
+    then:
+      - lambda: |-
+          lv_obj_clear_flag(id(btn_restart_yes), LV_OBJ_FLAG_HIDDEN);
+          lv_obj_clear_flag(id(btn_restart_no), LV_OBJ_FLAG_HIDDEN);
+          size_t lang = id(display_language).active_index().value_or(0) % 3;
+          static const char *const t_question[] = {"Gerät jetzt neu starten?", "Restart the device now?",
+                                                   "Перезапустить устройство сейчас?"};
+          lv_label_set_text(id(lbl_restart_question), t_question[lang]);
+          if (id(confirm_update)) id(update_question_text).execute();
+      - lvgl.widget.show: restart_dialog
+  - id: update_question_text
+    then:
+      - lambda: |-
+          size_t lang = id(display_language).active_index().value_or(0) % 3;
+          static const char *const t_q[] = {"Firmware %s installieren? Das Panel startet danach neu.",
+                                            "Install the firmware %s? The panel restarts afterwards.",
+                                            "Установить прошивку %s? Потом панель перезапустится."};
+          std::string version = "";
+          #ifdef USE_UPDATE
+          for (auto *u : App.get_updates()) { version = u->update_info.latest_version; break; }
+          #endif
+          char buf[160];
+          snprintf(buf, sizeof(buf), t_q[lang], version.c_str());
+          lv_label_set_text(id(lbl_restart_question), buf);
   # The player can hang while it closes a stream (seen with the stream of ioBroker.spotify-connect: STOP and no
   # IDLE any more, every later URL ignored). Not idle 5 s after a stop: restart, and play next_url afterwards.
   - id: unstick_player

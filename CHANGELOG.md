@@ -2,6 +2,13 @@
 
 ## [Unreleased]
 
+## [2.2.2] - 2026-11-17
+
+### Added
+- **Tile panel: update on the system page.** The ready-made panel firmware shows a button "Update &lt;version&gt;" on
+  the system page when a newer release is out; after Ja (the same question as for a restart) it installs it from
+  GitHub and restarts. A failed download says so and keeps the button.
+
 ## [2.2.1] - 2026-11-16
 
 ### Added
