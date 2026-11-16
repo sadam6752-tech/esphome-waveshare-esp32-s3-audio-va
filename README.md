@@ -64,7 +64,10 @@ Settings (brightness, microphone gain ...) stay on the board across updates.
   effect; brightness and effects are settings.
 - **Timers:** set by voice (or by pi-agent as a reminder), countdown on the ring and the display, then it rings.
   Stop it with the wake word, the middle button or a touch on the screen; it stops by itself after a minute.
-- **Buttons:** volume down, play/pause, volume up; while it rings, the middle one stops it.
+- **Buttons:** volume down, play/pause, volume up; while it rings, the middle one stops it, and while the
+  assistant speaks or listens it stops that (the wake word hardly gets through while the speaker plays).
+- **Stop a reply on the display:** a touch on the answer stops it and closes the screen; while the Ja/Nein buttons
+  wait for an answer only they count.
 - **Night mode:** the ring and the display dim, no wake beep.
 - **Everything is a setting in ioBroker**: microphone gain, wake word sensitivity, LED brightness, night mode,
   display ... under `assistant.0.satellites.<room>.controls.*`.

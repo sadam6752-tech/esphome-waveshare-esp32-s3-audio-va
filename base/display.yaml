@@ -312,6 +312,19 @@ lvgl:
           radius: 0
           pad_all: 12
           scrollable: false
+          # A touch on the answer stops it (the reply, the voice session) and closes it; while the Ja/Nein
+          # buttons wait for an answer only they count, so a stray touch does not cancel the question.
+          on_press:
+            - if:
+                condition:
+                  lambda: return lv_obj_has_flag(id(btn_confirm_yes), LV_OBJ_FLAG_HIDDEN);
+                then:
+                  - script.stop: dialog_hide
+                  - script.execute: stop_reply
+                  - lambda: |-
+                      id(dlg_answer).clear();
+                      id(dlg_question) = false;
+                  - lvgl.widget.hide: dialog_box
           widgets:
             - label:
                 id: lbl_heard
@@ -1242,6 +1255,12 @@ globals:
     type: uint32_t
     restore_value: false
     initial_value: '0'
+  # ioBroker switched the display dark (display_brightness 0): it stays dark until a touch, the assistant or a
+  # timer wakes it, like night mode
+  - id: lcd_remote_dark
+    type: bool
+    restore_value: false
+    initial_value: 'false'
   # the display just went back to the clock by itself (for the screen lock)
   - id: back_to_clock
     type: bool
@@ -1449,6 +1468,7 @@ interval:
                        (id(lcd_last_touch) != 0 && millis() - id(lcd_last_touch) < 10000);
           float day = id(lcd_day_brightness).state / 100.0f;
           float target = (id(night_mode).state && !awake) ? id(lcd_night_brightness).state / 100.0f : day;
+          if (id(lcd_remote_dark) && !awake) target = 0.0f;
           if (std::isnan(target)) target = 1.0f;
           static float shown_level = -1.0f;
           if (target != shown_level) {
@@ -1810,6 +1830,22 @@ api:
         locked: bool
       then:
         - lambda: screenlock::get().set_locked(locked);
+    # Brightness from ioBroker (ioBroker.satellite-display, state satellites.<name>.brightness): sets the day
+    # brightness (5-100 %); 0 = dark until a touch, the assistant or a timer wakes the display.
+    - action: display_brightness
+      variables:
+        brightness: int
+      then:
+        - if:
+            condition:
+              lambda: return brightness <= 0;
+            then:
+              - lambda: id(lcd_remote_dark) = true;
+            else:
+              - lambda: id(lcd_remote_dark) = false;
+              - number.set:
+                  id: lcd_day_brightness
+                  value: !lambda return std::min(100, std::max(5, int(brightness)));
 
 # The conversation on the screen. Added to the triggers of the core (lists of a package are appended).
 voice_assistant:

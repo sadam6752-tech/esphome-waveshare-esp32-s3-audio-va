@@ -1054,6 +1054,25 @@ script:
   # pointer in play_file(). A const parameter accepts both, and the const_cast
   # below keeps play_file() compiling on either. The type is spelled with
   # add_const_t because script parameter types may not contain spaces.
+  # Stops what the assistant says or does now: the voice session (ioBroker.assistant then drops the rest of the
+  # answer and does not open the microphone again) and the reply or announcement the media player plays.
+  # Key2 and a touch on the answer on the display.
+  - id: stop_reply
+    then:
+      - logger.log: "Reply stopped by the user"
+      - if:
+          condition:
+            voice_assistant.is_running:
+          then:
+            - voice_assistant.stop:
+      - if:
+          condition:
+            media_player.is_announcing: external_media_player
+          then:
+            - media_player.stop:
+                id: external_media_player
+                announcement: true
+
   - id: play_sound
     parameters:
       priority: bool
@@ -1568,7 +1587,17 @@ binary_sensor:
           then:
             - switch.turn_off: timer_ringing
           else:
-            - media_player.toggle: external_media_player
+            # The assistant speaks (a reply, an announcement) or listens -> Play/Pause stops it. The wake word
+            # cannot do that reliably while the speaker plays: the microphone hears the reply louder than the user.
+            - if:
+                condition:
+                  or:
+                    - voice_assistant.is_running:
+                    - media_player.is_announcing: external_media_player
+                then:
+                  - script.execute: stop_reply
+                else:
+                  - media_player.toggle: external_media_player
 
   - platform: gpio
     name: "Key3"

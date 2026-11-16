@@ -3,6 +3,13 @@
 ## [Unreleased]
 
 ### Added
+- **Brightness from ioBroker on the voice satellite:** action `display_brightness` (as on the tile panel) sets the day
+  brightness; 0 keeps the display dark until a touch, the assistant or a timer wakes it. ioBroker.satellite-display
+  then shows a brightness slider for the satellite (state `satellites.<name>.brightness`, tab Devices).
+- **Stop a reply:** Key2 (play/pause) stops what the assistant says or an announcement, and ends a listening
+  session; on the display a touch on the answer does the same and closes it (not while the Ja/Nein buttons wait).
+  The wake word could not do it reliably: while the speaker plays, the microphone hears the reply louder than the
+  user. ioBroker.assistant drops the rest of the answer when the session is stopped.
 - **Tile panel without voice:** `panel-lcd2.yaml` for the Waveshare ESP32-S3-Touch-LCD-2 (2 inch, 240x320, CST816D):
   clock, four pages of tiles, screen lock, brightness and language, time over SNTP. No ready-made image yet.
   System page, screen off after some minutes, Wi-Fi over USB (Improv), the screen turns with the board (IMU

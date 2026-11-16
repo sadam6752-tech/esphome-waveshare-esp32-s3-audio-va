@@ -104,6 +104,15 @@ slider does not swipe to the next page.
 
 Other API clients (assistant) receive the event too; it carries no meaning for them.
 
+## Display brightness
+
+| Action               | Parameters      | Effect |
+| -------------------- | --------------- | ------ |
+| `display_brightness` | `brightness` int | 1-100: the day brightness in % (at least 5, the same number as in the settings page); 0: dark until a touch, the assistant or a ringing timer lights it, like night mode |
+
+The voice satellite has it from the release after 2.1.0, the tile panel (`panel-lcd2.yaml`) from its start.
+ioBroker.satellite-display creates `satellites.<name>.brightness` only when the firmware has the action.
+
 ## Screen lock (2.1.0+)
 
 | Action        | Parameters | Effect |
