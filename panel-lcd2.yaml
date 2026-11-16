@@ -782,15 +782,16 @@ lvgl:
                   text_font: font_small
                   text_color: 0xFFFFFF
                   text: "Neustart"
-        # A newer release (update entity "Firmware" of release-panel.yaml): asks first, like the restart.
+        # A newer release (update entity "Firmware" of release-panel.yaml): asks first, like the restart. Top right
+        # like "FW Update" on the voice satellite (base/display.yaml).
         - button:
             id: btn_update
             hidden: true
-            align: BOTTOM_LEFT
-            x: 10
-            y: -8
-            width: 150
-            height: 34
+            align: TOP_RIGHT
+            x: -10
+            y: 8
+            width: 130
+            height: 32
             pad_all: 2
             bg_color: 0x1D4ED8
             on_click:

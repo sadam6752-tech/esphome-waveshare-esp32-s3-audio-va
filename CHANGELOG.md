@@ -2,6 +2,12 @@
 
 ## [Unreleased]
 
+## [2.2.3] - 2026-11-17
+
+### Changed
+- **Tile panel:** the button "Update &lt;version&gt;" sits at the top right of the system page, like "FW Update" on the
+  voice satellite.
+
 ## [2.2.2] - 2026-11-17
 
 ### Added
