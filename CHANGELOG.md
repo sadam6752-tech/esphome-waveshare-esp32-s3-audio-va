@@ -2,6 +2,8 @@
 
 ## [Unreleased]
 
+## [2.2.0] - 2026-11-16
+
 ### Added
 - **Brightness from ioBroker on the voice satellite:** action `display_brightness` (as on the tile panel) sets the day
   brightness; 0 keeps the display dark until a touch, the assistant or a timer wakes it. ioBroker.satellite-display
