@@ -52,15 +52,32 @@
     </div>
   </div>
 
+  <h2>Tile panel</h2>
+  <p>No voice: the Waveshare ESP32-S3-Touch-LCD-2 (2 inch) as a wall or desk panel for ioBroker.satellite-display
+    with the clock, four pages of tiles and the screen lock.</p>
+  <div class="cards">
+    <div class="card">
+      <h2>ESP32-S3-Touch-LCD-2</h2>
+      <p>Optional: a MAX98357A amplifier on the header P2 plays streams from ioBroker.</p>
+      <esp-web-install-button manifest="firmware/panel/manifest.json">
+        <button slot="activate">Install</button>
+        <span slot="unsupported">Use Chrome or Edge on a computer.</span>
+        <span slot="not-allowed">Open this page over https.</span>
+      </esp-web-install-button>
+    </div>
+  </div>
+
   <h2>Steps</h2>
   <ol>
     <li>Connect the board with a USB-C cable and press <b>Install</b>. If no port shows up, hold BOOT while
       plugging the cable in.</li>
     <li>After flashing, the page offers to set up Wi-Fi. With the display, Wi-Fi can also be set on the
       device: Settings (gear) &gt; Wi-Fi. Without a network the board opens the access point
-      <b>Waveshare-VA Setup</b>; join it with a phone and pick your network.</li>
+      <b>Waveshare-VA Setup</b> (the tile panel: <b>Tile Panel Setup</b>); join it with a phone and pick your
+      network.</li>
     <li>In ioBroker.assistant, add the satellite (Satellites tab). Later updates show up there as the
-      <b>Firmware</b> update.</li>
+      <b>Firmware</b> update. Add the tile panel in ioBroker.satellite-display (Devices tab, IP address,
+      port 6053).</li>
   </ol>
   <p><a href="https://github.com/sadam6752-tech/esphome-waveshare-esp32-s3-audio-va">Source and documentation</a></p>
 </main>

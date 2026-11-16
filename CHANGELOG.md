@@ -2,6 +2,14 @@
 
 ## [Unreleased]
 
+## [2.2.1] - 2026-11-16
+
+### Added
+- **Tile panel on the install page:** `release-panel.yaml` is the ready-made firmware of the tile panel
+  (ESP32-S3-Touch-LCD-2) without Wi-Fi in it: flash it from the install page, set up Wi-Fi in the browser (Improv) or
+  over the access point "Tile Panel Setup". The release builds it with the voice firmware (assets
+  `tile-panel-lcd2-<version>.*.bin`, manifest `firmware/panel/manifest.json`, update entity "Firmware").
+
 ## [2.2.0] - 2026-11-16
 
 ### Added

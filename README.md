@@ -160,8 +160,13 @@ volume, title and stop), e.g. the stream of ioBroker.airplay-receiver. The brigh
 the adapter work unchanged; add the panel in the adapter like a satellite (IP address, port 6053). The time comes
 from the network (SNTP), the board has no clock chip.
 
-There is no ready-made image of the panel yet. Build it with a `secrets.yaml` (Wi-Fi) and flash it the first time
-over USB, later over Wi-Fi:
+**Install:** on the [install page](https://sadam6752-tech.github.io/esphome-waveshare-esp32-s3-audio-va/), card
+*Tile panel*, with Chrome or Edge over USB. Right after flashing the page offers to set up Wi-Fi; without a reachable
+Wi-Fi the panel opens the access point "Tile Panel Setup". Then add it in ioBroker.satellite-display. A newer release
+installs the same way (without erasing, the Wi-Fi stays); the ready-made firmware also has an update entity
+"Firmware" that points at the GitHub releases.
+
+To build it yourself instead, use a `secrets.yaml` (Wi-Fi) and flash it the first time over USB, later over Wi-Fi:
 
 ```bash
 esphome -s build_path C:/ESPHome/build/panel run panel-lcd2.yaml
@@ -191,8 +196,9 @@ Minute" are often taken by ioBroker.assistant itself as a plain timer.
 
 Not needed to use the board - only to change the firmware.
 
-- `release-display.yaml` / `release-core.yaml`: the ready-made firmware (with / without display), built by
-  `.github/workflows/release.yml` on every tag `v*` and published with the install page on GitHub Pages.
+- `release-display.yaml` / `release-core.yaml` / `release-panel.yaml`: the ready-made firmware (with / without
+  display, tile panel), built by `.github/workflows/release.yml` on every tag `v*` and published with the install
+  page on GitHub Pages.
 - `base/core.yaml`: audio, wake word, LED ring, buttons, timers; `base/display.yaml`: the display;
   `base/release.yaml`: Wi-Fi setup, updates, NTP clock, the "ioBroker" wake word.
 - `components/cst3530`: the touch driver (ESPHome has none for this chip), written after Waveshare's

@@ -1,0 +1,46 @@
+# Ready-made firmware of the TILE PANEL (Waveshare ESP32-S3-Touch-LCD-2, panel-lcd2.yaml), built by
+# .github/workflows/release.yml and offered on the install page.
+# To build it yourself: esphome compile release-panel.yaml (needs a secrets.yaml, e.g. a copy of
+# secrets.example.yaml: the Wi-Fi in it is removed below).
+#
+# No secrets in it: Wi-Fi is set up after flashing - in the browser right after flashing (Improv), or through
+# the access point "Tile Panel Setup" that opens when no network is reachable. Updates come from the GitHub
+# releases (update entity "Firmware").
+
+substitutions:
+  # set by the release workflow
+  release_version: "dev"
+  release_variant: panel
+  release_build_path: ".esphome/build/sd-panel-release"
+  release_pages: "https://sadam6752-tech.github.io/esphome-waveshare-esp32-s3-audio-va"
+  build_path: ${release_build_path}
+
+packages:
+  panel: !include panel-lcd2.yaml
+
+esphome:
+  project:
+    name: sadam6752-tech.tile-panel-lcd2
+    version: ${release_version}
+
+# No network in the firmware: the one set up on the device is saved in flash.
+wifi:
+  ssid: !remove
+  password: !remove
+  ap:
+    ssid: "Tile Panel Setup"
+    ap_timeout: 1min
+
+http_request:
+  timeout: 20s
+
+ota:
+  - platform: http_request
+    id: ota_http
+
+update:
+  - platform: http_request
+    id: firmware_update
+    name: Firmware
+    source: ${release_pages}/firmware/${release_variant}/manifest.json
+    update_interval: 6h

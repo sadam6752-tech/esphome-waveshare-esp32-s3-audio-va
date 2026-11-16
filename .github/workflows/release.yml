@@ -1,6 +1,6 @@
 name: Release firmware
 
-# On a tag v*: builds the ready-made firmware (with and without the display), attaches it to the GitHub
+# On a tag v*: builds the ready-made firmware (voice with and without the display, tile panel), attaches it to the GitHub
 # release and publishes the install page and the update manifests on GitHub Pages:
 #   https://<owner>.github.io/<repo>/                     install page (ESP Web Tools, flash from Chrome/Edge)
 #   https://<owner>.github.io/<repo>/firmware/<variant>/  manifest.json + binaries (OTA updates of the devices)
@@ -28,7 +28,7 @@ jobs:
     runs-on: ubuntu-latest
     strategy:
       matrix:
-        variant: [display, core]
+        variant: [display, core, panel]
     steps:
       - uses: actions/checkout@v7
 
@@ -103,6 +103,8 @@ jobs:
             cp "site/firmware/$variant/firmware.factory.bin" "assets/waveshare-va-$variant-$v.factory.bin"
             cp "site/firmware/$variant/firmware.ota.bin" "assets/waveshare-va-$variant-$v.ota.bin"
           done
+          cp site/firmware/panel/firmware.factory.bin "assets/tile-panel-lcd2-$v.factory.bin"
+          cp site/firmware/panel/firmware.ota.bin "assets/tile-panel-lcd2-$v.ota.bin"
           find site assets -type f
 
       - name: Release assets
