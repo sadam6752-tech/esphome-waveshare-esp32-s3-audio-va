@@ -2,7 +2,14 @@
 
 ## [Unreleased]
 
+## [2.3.0] - 2026-11-17
+
 ### Added
+- **Tile panel: battery.** The charge of a LiPo on the battery connector (GPIO5, divider 1:3) as an icon with percent
+  at the top right of the clock (red below 15 %), on the system page, and as sensors "Battery" and "Battery voltage"
+  over the API; hidden without a battery. The percent comes from the voltage (a LiPo curve), so it is rough.
+- **Tile panel: update progress.** While a new firmware is written the panel shows a blue screen with a warning, a
+  progress bar and the percent, as the voice satellite does; a failed update says so.
 - **Wake word "Hey Bro"** built in next to "ioBroker" (English, microWakeWord trained in Colab with Piper
   samples); switch it on in ioBroker.assistant (Satellites tab) like the others.
 

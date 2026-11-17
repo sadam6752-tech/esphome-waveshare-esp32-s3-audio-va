@@ -151,6 +151,7 @@ CST816D) into a wall or desk panel for ioBroker.satellite-display: the clock, th
 lock, a system page (swipe right from the clock: Wi-Fi, IP, uptime, memory, connection to ioBroker, restart) and a
 settings page (brightness, screen off after some minutes, language). The screen turns by itself with the board (USB
 right or left, from its IMU). The board has no microphone and no speaker, so there is no voice assistant on it.
+With a LiPo on the battery connector the clock shows its charge at the top right (from the voltage, so rough).
 
 **Sound (optional):** a MAX98357A I2S amplifier on the header P2 (BCLK GPIO13, LRC GPIO12, DIN GPIO14, VIN 5V, GND;
 camera data lines, so only without a camera) gives the panel a player for MP3, FLAC and WAV streams, with a
