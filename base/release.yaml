@@ -4,7 +4,7 @@
 # No secrets in it: Wi-Fi is set up after flashing - on the display (Settings > Wi-Fi), in the browser
 # right after flashing (Improv), or through the setup access point "Waveshare-VA Setup" that opens when
 # no network is reachable. Updates come from the GitHub releases (update entity "Firmware").
-# Driven by ioBroker.assistant: clock from NTP, the wake words "ioBroker" and "Hey Bro" built in.
+# Driven by ioBroker.assistant: clock from NTP, the wake words "ioBroker", "Hey Bro" and "Alisa" built in.
 ###############################################################################
 
 substitutions:
@@ -47,9 +47,11 @@ micro_wake_word:
   models:
     - model: wakewords/iobroker.json
       id: iobroker
-    # trained in Colab (microWakeWord, Piper samples), English
+    # trained in Colab (microWakeWord, Piper samples): Hey Bro in English, Alisa in Russian
     - model: wakewords/hey_bro.json
       id: hey_bro
+    - model: wakewords/alisa.json
+      id: alisa
 
 http_request:
   timeout: 20s

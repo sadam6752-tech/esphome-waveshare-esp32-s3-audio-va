@@ -2,6 +2,12 @@
 
 ## [Unreleased]
 
+## [2.3.1] - 2026-11-17
+
+### Added
+- **Wake word "Alisa" (Алиса)** built in, trained on the Russian Piper voices (Colab, like "Hey Bro"), cutoff
+  0.9.
+
 ## [2.3.0] - 2026-11-17
 
 ### Added
