@@ -98,7 +98,7 @@ System  ◀─ swipe ─  Clock  ─ swipe ▶  Tiles 1 ▶ 2 ▶ 3 ▶ 4       
 - **System:** firmware version, Wi-Fi and signal, IP, uptime, memory, connection to the assistant; **FW Update**
   and **Neustart** (restart, asks first).
 - **Tiles:** up to four pages of tiles from ioBroker - values, gauges, bars, charts, switches, dimmers,
-  buttons and thermostats (see [Tile pages](#tile-pages)). A page without tiles is skipped.
+  buttons, thermostats, groups of values, tanks, batteries and status lights (see [Tile pages](#tile-pages)). A page without tiles is skipped.
 - **Screen lock:** with a PIN set in ioBroker the display shows only the clock and a lock and the wake word is
   ignored until the PIN is typed (see [Screen lock](#screen-lock)).
 - **Settings:** volume, display brightness by day and at night, LED ring, microphone gain (dB), microphone off,
@@ -123,7 +123,8 @@ All under `assistant.0.satellites.<room>.controls.`:
 ### Tile pages
 
 Up to four pages on a grid of 2 x 4 cells, each with up to eight tiles in four sizes (small, square, wide,
-large) and eight types: value, gauge, bar, chart, switch, dimmer, button and thermostat. What is on them is not part of the
+large) and twelve types: value, gauge, bar, chart, switch, dimmer, button, thermostat and, since 2.3.0, group, level
+(tank), battery and status. What is on them is not part of the
 firmware: the adapter [ioBroker.satellite-display](https://github.com/sadam6752-tech/ioBroker.satellite-display) connects to the board next to
 ioBroker.assistant, sends the layout and the values of your states and switches them when a tile is touched.
 

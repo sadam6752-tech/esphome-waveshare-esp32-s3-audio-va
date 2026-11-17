@@ -2,6 +2,16 @@
 
 ## [Unreleased]
 
+### Added
+- **Four new tile types** (with ioBroker.satellite-display): `group` (a title and up to four rows "name … value",
+  e.g. outside, inside and water temperature in one tile), `level` (a tank: a vertical bar with marks, the fill in
+  percent and a second amount such as litres), `battery` (a battery symbol, filled, with a bolt while charging, the
+  state of charge and the power) and `status` (an icon that lights up while on, with a text such as "an" or "Offen",
+  e.g. shore power or a window). Not touchable. Docs in [docs/TILES.md](docs/TILES.md).
+- **Items of a tile:** actions `tile_item`, `tile_item_value`, `tile_item_text` and `tile_item_color` carry the extra
+  values of these tiles (the rows of a group, the litres of a tank, the power of a battery). The adapter takes
+  `tile_item` as the sign that the firmware has the new types.
+
 ## [2.2.3] - 2026-11-17
 
 ### Changed

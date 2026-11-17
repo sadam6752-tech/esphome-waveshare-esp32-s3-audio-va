@@ -1,6 +1,7 @@
 # Tile pages: format between firmware and ioBroker
 
-Status: firmware 2.0.0, the thermostat since 2.0.1; code in `components/tiles`, actions in `base/display.yaml`.
+Status: firmware 2.0.0, the thermostat since 2.0.1, group, level, battery and status since 2.3.0; code in
+`components/tiles`, actions in `base/display.yaml` (and `panel-lcd2.yaml`).
 
 The display gets up to **4 tile pages**. What is on them is not compiled into the firmware: an ioBroker
 adapter sends the layout and the values over the ESPHome Native API, and gets touches back as events.
@@ -38,6 +39,10 @@ in the log.
 | `dimmer` | label, toggle, slider, percent         | w l         | toggle → `switch`, slider → `level` |
 | `button` | icon, label                            | s q w       | press → `press`          |
 | `thermostat` | label, arc with the current temperature, − target +, relay dot | q l | − / + → `setpoint` |
+| `group`  | a title and 1–4 rows "label … value" (items) | s q w l | none |
+| `level`  | label, a vertical tank from min to max with marks at 25/50/75 %, value, a second amount (item 1) | q l | none |
+| `battery` | label, a battery symbol filled from min to max, a bolt while charging, value, power (item 1) | s q w l | none |
+| `status` | icon, label, value line; icon, value and tile light up while on | s q w | none |
 
 `tile_set` creates the widgets of the tile; a new `tile_set` for the slot or `tile_clear` deletes them.
 A square `switch` shows its icon bottom left; a `button` shows its icon (without one: only the name).
@@ -63,6 +68,10 @@ ESPHome actions have no optional parameters: every parameter is always sent.
 | `tile_setpoint` | `page`, `slot`, `value` float, `step` float | Target temperature of a `thermostat` and the step of its − / + buttons (2.0.1+) |
 | `tile_history`  | `page`, `slot`, `points` float[] | Replaces the line of a `chart` (at most 60 points, oldest first) |
 | `tile_clear`    | `page` int (0 = all pages) | Removes the tiles of a page |
+| `tile_item`     | `page`, `slot`, `index` int 0–3, `label` string, `unit` string, `decimals` int | Creates or configures item `index` of a `group`, `level` or `battery`; its value shows "–" (2.3.0+) |
+| `tile_item_value` | `page`, `slot`, `index`, `value` float | The number of an item, with its unit and decimals (2.3.0+) |
+| `tile_item_text`  | `page`, `slot`, `index`, `value` string | A text instead of a number, e.g. "an" (2.3.0+) |
+| `tile_item_color` | `page`, `slot`, `index`, `color` int | Colour (0xRRGGBB) of the value of an item, `0` = its own colour again (2.3.0+) |
 
 Rules:
 
@@ -74,6 +83,26 @@ Rules:
 - `min`/`max` are used by `gauge`, `bar`, the scale of `chart` (equal values: the chart scales itself) and
   `thermostat` (scale of the arc and the limits of the target).
 - `tile_value` of a `thermostat` is its current temperature (the arc), `tile_setpoint` its target.
+- `tile_value` of a `level` and a `battery` is the fill on the scale `min`..`max` of tile_set (equal values: 0..100);
+  of a `status` a number shown with unit and decimals.
+- `tile_text` works on `value` and `status`; `tile_state` on `switch`, `dimmer`, `thermostat`, `battery` (on =
+  charging: the bolt; hidden until the first `tile_state`) and `status` (on = lit).
+- `tile_color` of a `group` colours its title; of a `battery` its fill (`0` = green, the value stays white unless a
+  colour is set); of a `status` the icon and the value while it is on (`0` = the accent colour).
+
+## Items (2.3.0+)
+
+A `group`, `level` or `battery` tile has extra values, its **items**, configured with `tile_item` after `tile_set`
+(which deletes them) and before their values:
+
+- `group`: items 0–3 are its rows. Tall (q, l): the title (the `label` of tile_set, hidden when empty) on top, the
+  rows below sharing the height evenly, name left and value right. Flat (s, w): no title, the items side by side as
+  columns (name over value). Four rows under a title leave 20 px a row; three fit comfortably.
+- `level`: item 1 is the second amount under the value, e.g. litres; its name is not shown.
+- `battery`: item 1 is the power, right on a wide tile, bottom right on a square one, below the value on a large one;
+  a small battery has no room for it and ignores it.
+- Other indices, items of other types, and values for an item that was never configured are ignored.
+- `label` at most 24 characters, `unit` at most 8, a text at most 32 (cut at a character, never inside an umlaut).
 - A value for an empty or different-type slot is ignored.
 - The firmware does not keep the layout: after every reconnect the adapter sends `tile_clear 0`, all
   `tile_set`, then the current values and histories.
@@ -158,6 +187,11 @@ A new icon needs a new firmware (the glyph in `font_icons` of `base/display.yaml
   warning in its log.
 - The thermostat came in 2.0.1 with its own action `tile_setpoint`, so `tile_set` keeps its parameters and
   2.0.0 still works with a newer adapter (which then leaves thermostat tiles out).
+- `group`, `level`, `battery` and `status` came in 2.3.0 together with the item actions. Several values in one tile
+  need more than `tile_set` and one value, and ESPHome actions have no optional parameters, so the extra values got
+  actions of their own (`tile_item*`) instead of new parameters of `tile_set`. The adapter takes the action
+  `tile_item` as the sign of the four types; an older firmware gets none of these tiles (a warning in the log of the
+  adapter), as 2.0.0 got no thermostat.
 - The old entities `Value 1–4`, `Switch 1–4` and their labels, units and decimals (used via
   `assistant.0.satellites.<satellite>.controls.*`) are **removed** together with the pages "values" and
   "switches". This breaks those controls, so the firmware with tiles is released as **2.0.0**.
