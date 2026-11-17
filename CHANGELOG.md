@@ -2,6 +2,10 @@
 
 ## [Unreleased]
 
+### Added
+- **Wake word "Hey Bro"** built in next to "ioBroker" (English, microWakeWord trained in Colab with Piper
+  samples); switch it on in ioBroker.assistant (Satellites tab) like the others.
+
 ## [2.2.3] - 2026-11-17
 
 ### Changed

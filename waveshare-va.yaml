@@ -63,6 +63,8 @@ micro_wake_word:
   models:
     - model: wakewords/iobroker.json
       id: iobroker
+    - model: wakewords/hey_bro.json
+      id: hey_bro
 
 # No Home Assistant here: the device is driven by ioBroker.assistant, which does
 # not answer the time request of the native API. Take the clock from NTP instead

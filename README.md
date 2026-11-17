@@ -58,7 +58,7 @@ Settings (brightness, microphone gain ...) stay on the board across updates.
 
 ## What it does
 
-- **Voice:** wake word on the board - **"ioBroker"** (built in), Alexa, Okay Nabu, Hey Jarvis, Hey Mycroft; which
+- **Voice:** wake word on the board - **"ioBroker"** and **"Hey Bro"** (built in), Alexa, Okay Nabu, Hey Jarvis, Hey Mycroft; which
   ones listen is chosen in ioBroker.assistant. Speech recognition, the answer and TTS run in ioBroker.assistant.
 - **LED ring:** listening, thinking, answering, timer, ringing, no Wi-Fi, no connection - each its own color and
   effect; brightness and effects are settings.
@@ -202,7 +202,7 @@ Not needed to use the board - only to change the firmware.
   display, tile panel), built by `.github/workflows/release.yml` on every tag `v*` and published with the install
   page on GitHub Pages.
 - `base/core.yaml`: audio, wake word, LED ring, buttons, timers; `base/display.yaml`: the display;
-  `base/release.yaml`: Wi-Fi setup, updates, NTP clock, the "ioBroker" wake word.
+  `base/release.yaml`: Wi-Fi setup, updates, NTP clock, the wake words "ioBroker" and "Hey Bro".
 - `components/cst3530`: the touch driver (ESPHome has none for this chip), written after Waveshare's
   `esp_lcd_touch_cst3530` (Apache-2.0).
 
