@@ -22,9 +22,13 @@ static const uint32_t COLOR_TRACK = 0x2E3A47;
 // the relay of a thermostat: heating on / off
 static const uint32_t COLOR_HEAT_ON = 0x4CAF50;
 static const uint32_t COLOR_HEAT_OFF = 0x4B5563;
+// the fill of a battery when ioBroker sends no colour
+static const uint32_t COLOR_BATTERY = 0x22C55E;
 // icons of the - / + buttons of a thermostat (in font_icons, not in the list of the tiles)
 static const char *const GLYPH_MINUS = "\U000F0374";
 static const char *const GLYPH_PLUS = "\U000F0415";
+// the bolt of a charging battery ("flash", also in font_icons_small)
+static const char *const GLYPH_BOLT = "\U000F0241";
 // a press of - / + is sent this long after the last one
 static const uint32_t SETPOINT_DELAY_MS = 1000;
 // the indicator of a switch that is on
@@ -68,6 +72,19 @@ static std::string icon_text(const std::string &name) {
   return "";
 }
 
+// at most `max` characters of a UTF-8 text, never a part of one (a cut umlaut shows as a box)
+static std::string utf8_prefix(const std::string &s, size_t max) {
+  size_t i = 0, n = 0;
+  while (i < s.size() && n < max) {
+    unsigned char c = static_cast<unsigned char>(s[i]);
+    size_t len = c < 0x80 ? 1 : (c >> 5) == 0x6 ? 2 : (c >> 4) == 0xE ? 3 : (c >> 3) == 0x1E ? 4 : 1;
+    if (i + len > s.size()) break;
+    i += len;
+    n++;
+  }
+  return s.substr(0, i);
+}
+
 static bool parse_size(const std::string &s, Size &size, int &cols, int &rows) {
   if (s == "s") { size = Size::S; cols = 1; rows = 1; }
   else if (s == "q") { size = Size::Q; cols = 1; rows = 2; }
@@ -91,6 +108,10 @@ static bool parse_type(const std::string &s, Type &type) {
   else if (s == "dimmer") type = Type::DIMMER;
   else if (s == "button") type = Type::BUTTON;
   else if (s == "thermostat") type = Type::THERMOSTAT;
+  else if (s == "group") type = Type::GROUP;
+  else if (s == "level") type = Type::LEVEL;
+  else if (s == "battery") type = Type::BATTERY;
+  else if (s == "status") type = Type::STATUS;
   else return false;
   return true;
 }
@@ -106,6 +127,10 @@ static bool size_allowed(Type type, Size size) {
     case Type::DIMMER: return size == Size::W || size == Size::L;
     case Type::BUTTON: return size != Size::L;
     case Type::THERMOSTAT: return size == Size::Q || size == Size::L;
+    case Type::GROUP: return true;
+    case Type::LEVEL: return size == Size::Q || size == Size::L;
+    case Type::BATTERY: return true;
+    case Type::STATUS: return size != Size::L;
     default: return false;
   }
 }
@@ -113,6 +138,21 @@ static bool size_allowed(Type type, Size size) {
 static void no_scroll(lv_obj_t *obj) {
   lv_obj_remove_flag(obj, LV_OBJ_FLAG_SCROLLABLE);
   lv_obj_remove_flag(obj, LV_OBJ_FLAG_SCROLL_ON_FOCUS);
+}
+
+// a plain filled rectangle (the marks of a tank, the cap of a battery)
+static lv_obj_t *make_rect(lv_obj_t *parent, int w, int h, uint32_t color) {
+  lv_obj_t *r = lv_obj_create(parent);
+  lv_obj_set_size(r, w, h);
+  lv_obj_set_style_bg_color(r, lv_color_hex(color), 0);
+  lv_obj_set_style_bg_opa(r, LV_OPA_COVER, 0);
+  lv_obj_set_style_border_width(r, 0, 0);
+  lv_obj_set_style_shadow_width(r, 0, 0);
+  lv_obj_set_style_radius(r, 0, 0);
+  lv_obj_set_style_pad_all(r, 0, 0);
+  lv_obj_remove_flag(r, LV_OBJ_FLAG_CLICKABLE);
+  no_scroll(r);
+  return r;
 }
 
 static lv_obj_t *make_label(lv_obj_t *parent, const lv_font_t *font, uint32_t color, const char *text) {
@@ -243,11 +283,14 @@ bool Tiles::set(int page, int slot, int col, int row, const std::string &size_na
   t->decimals = std::max(0, std::min(3, decimals));
   t->min = min;
   t->max = max;
-  t->unit = unit.substr(0, 8);
+  t->unit = utf8_prefix(unit, 8);
   int index = (page - 1) * SLOTS + slot;
+  const std::string icon_glyph = icon_text(icon);
 
   int w = (cols == 2) ? 308 : 151;
   int h = row_y(row + rows) - 6 - row_y(row);
+  t->width = w;
+  t->height = h;
   lv_obj_t *box = lv_obj_create(this->pages_[page - 1]);
   t->box = box;
   lv_obj_set_pos(box, col_x(col), row_y(row));
@@ -262,12 +305,15 @@ bool Tiles::set(int page, int slot, int col, int row, const std::string &size_na
   lv_obj_remove_flag(box, LV_OBJ_FLAG_CLICKABLE);
 
   const Fonts &f = this->fonts_;
-  std::string name = label.substr(0, 24);
+  std::string name = utf8_prefix(label, 24);
   bool tall = rows == 2;
   // a small bar or chart: name and value on the first line, the bar or the line below
   bool small_two_lines = size == Size::S && (type == Type::BAR || type == Type::CHART);
-  bool one_line = (size == Size::S && type != Type::BUTTON && !small_two_lines) ||
-                  (size == Size::W && (type == Type::SWITCH || type == Type::DIMMER || type == Type::BUTTON));
+  // group, level, battery and status place their name themselves (it starts top left)
+  bool own_layout = type == Type::GROUP || type == Type::LEVEL || type == Type::BATTERY || type == Type::STATUS;
+  bool one_line = !own_layout &&
+                  ((size == Size::S && type != Type::BUTTON && !small_two_lines) ||
+                   (size == Size::W && (type == Type::SWITCH || type == Type::DIMMER || type == Type::BUTTON)));
 
   // the name: top left, or left in the middle on a one-line tile
   if (type != Type::BUTTON) {
@@ -426,7 +472,7 @@ bool Tiles::set(int page, int slot, int col, int row, const std::string &size_na
       lv_obj_remove_flag(sw, LV_OBJ_FLAG_CLICKABLE);
       if (tall) lv_obj_align(sw, LV_ALIGN_BOTTOM_RIGHT, -9, -10);
       else lv_obj_align(sw, LV_ALIGN_RIGHT_MID, -9, 0);
-      std::string glyph = icon_text(icon);
+      const std::string &glyph = icon_glyph;
       if (tall && !glyph.empty()) {
         lv_obj_t *ic = make_label(box, f.icons, COLOR_LABEL, glyph.c_str());
         lv_obj_align(ic, LV_ALIGN_BOTTOM_LEFT, 9, -8);
@@ -482,7 +528,7 @@ bool Tiles::set(int page, int slot, int col, int row, const std::string &size_na
     }
 
     case Type::BUTTON: {
-      std::string glyph = icon_text(icon);
+      const std::string &glyph = icon_glyph;
       lv_obj_t *text = make_label(box, f.label, COLOR_VALUE, name.c_str());
       t->label = text;
       lv_label_set_long_mode(text, LV_LABEL_LONG_MODE_DOTS);
@@ -510,14 +556,144 @@ bool Tiles::set(int page, int slot, int col, int row, const std::string &size_na
       break;
     }
 
+    case Type::GROUP:
+      // tall: the title above the rows; flat: no room for it, only the values side by side. The rows come with
+      // tile_item (layout_group_).
+      if (!tall) lv_obj_add_flag(t->label, LV_OBJ_FLAG_HIDDEN);
+      break;
+
+    case Type::LEVEL: {
+      // a tank: a vertical bar with marks at a quarter, a half and three quarters, the value right of it, the second
+      // amount (tile_item 1) below the value. Under the icon of a large tile the tank starts lower.
+      int top = (size == Size::L && !icon_glyph.empty()) ? 38 : 28;
+      int tw = size == Size::Q ? 26 : 34;
+      int th = h - top - 8;
+      lv_obj_t *bar = lv_bar_create(box);
+      t->bar = bar;
+      lv_bar_set_range(bar, 0, 1000);
+      lv_obj_set_size(bar, tw, th);
+      lv_obj_set_pos(bar, 9, top);
+      lv_obj_set_style_bg_color(bar, lv_color_hex(COLOR_TRACK), LV_PART_MAIN);
+      lv_obj_set_style_bg_color(bar, lv_color_hex(COLOR_ACCENT), LV_PART_INDICATOR);
+      lv_obj_set_style_radius(bar, 4, LV_PART_MAIN);
+      lv_obj_set_style_radius(bar, 4, LV_PART_INDICATOR);
+      lv_obj_remove_flag(bar, LV_OBJ_FLAG_CLICKABLE);
+      for (int pct : {25, 50, 75}) {
+        lv_obj_t *mark = make_rect(box, 6, 2, COLOR_LABEL);
+        lv_obj_set_pos(mark, 9, top + th - th * pct / 100 - 1);
+      }
+      int x = 9 + tw + 12;
+      t->value_label = make_label(box, size == Size::Q ? f.medium : f.large, COLOR_VALUE, "–");
+      lv_obj_set_pos(t->value_label, x, top + 2);
+      t->item_x = x;
+      t->item_y = top + (size == Size::Q ? 34 : 44);
+      break;
+    }
+
+    case Type::BATTERY: {
+      // the symbol: a frame with a cap, the fill inside it (3 px from the frame), the bolt over it while charging
+      int bw, bh, by;
+      if (size == Size::S) {
+        bw = 44;
+        bh = 24;
+        by = (h - bh) / 2;
+      } else if (size == Size::W) {
+        bw = 60;
+        bh = 28;
+        by = (h - bh) / 2;
+      } else if (size == Size::Q) {
+        bw = w - 18 - 6;
+        bh = 36;
+        by = 30;
+      } else {
+        bw = 120;
+        bh = 50;
+        by = 36;
+      }
+      lv_obj_t *frame = lv_obj_create(box);
+      lv_obj_set_size(frame, bw, bh);
+      lv_obj_set_pos(frame, 9, by);
+      lv_obj_set_style_bg_opa(frame, LV_OPA_TRANSP, 0);
+      lv_obj_set_style_border_color(frame, lv_color_hex(COLOR_LABEL), 0);
+      lv_obj_set_style_border_width(frame, 3, 0);
+      lv_obj_set_style_radius(frame, 5, 0);
+      lv_obj_set_style_shadow_width(frame, 0, 0);
+      lv_obj_set_style_pad_all(frame, 0, 0);
+      lv_obj_remove_flag(frame, LV_OBJ_FLAG_CLICKABLE);
+      no_scroll(frame);
+      int ch = bh * 2 / 5;
+      lv_obj_t *cap = make_rect(box, 4, ch, COLOR_LABEL);
+      lv_obj_set_pos(cap, 9 + bw, by + (bh - ch) / 2);
+      lv_obj_t *bar = lv_bar_create(frame);
+      t->bar = bar;
+      lv_bar_set_range(bar, 0, 1000);
+      lv_obj_set_size(bar, bw - 12, bh - 12);
+      lv_obj_center(bar);
+      lv_obj_set_style_bg_opa(bar, LV_OPA_TRANSP, LV_PART_MAIN);
+      lv_obj_set_style_bg_color(bar, lv_color_hex(COLOR_BATTERY), LV_PART_INDICATOR);
+      lv_obj_set_style_radius(bar, 2, LV_PART_MAIN);
+      lv_obj_set_style_radius(bar, 2, LV_PART_INDICATOR);
+      lv_obj_remove_flag(bar, LV_OBJ_FLAG_CLICKABLE);
+      t->bolt = make_label(frame, tall ? f.icons : f.icons_small, COLOR_VALUE, GLYPH_BOLT);
+      lv_obj_center(t->bolt);
+      lv_obj_add_flag(t->bolt, LV_OBJ_FLAG_HIDDEN);
+      if (size == Size::S || size == Size::W) {
+        // the name and the value right of the symbol; a wide one keeps room for the power at the right
+        int x = size == Size::S ? 62 : 82;
+        lv_obj_set_width(t->label, w - x - 9 - (size == Size::W ? 90 : 0));
+        lv_obj_set_pos(t->label, x, 6);
+        t->value_label = make_label(box, f.medium, COLOR_VALUE, "–");
+        lv_obj_align(t->value_label, LV_ALIGN_BOTTOM_LEFT, x, -4);
+      } else if (size == Size::Q) {
+        t->value_label = make_label(box, f.medium, COLOR_VALUE, "–");
+        lv_obj_align(t->value_label, LV_ALIGN_BOTTOM_LEFT, 9, -6);
+      } else {
+        t->value_label = make_label(box, f.large, COLOR_VALUE, "–");
+        lv_obj_set_pos(t->value_label, 150, 30);
+      }
+      break;
+    }
+
+    case Type::STATUS: {
+      // like a switch that cannot be touched: the icon, the value and the tile light up while on (show_state_)
+      if (size == Size::Q) {
+        if (!icon_glyph.empty()) {
+          t->icon = make_label(box, f.icons, COLOR_LABEL, icon_glyph.c_str());
+          lv_obj_align(t->icon, LV_ALIGN_TOP_MID, 0, 8);
+        }
+        lv_obj_set_style_text_align(t->label, LV_TEXT_ALIGN_CENTER, 0);
+        lv_obj_align(t->label, LV_ALIGN_TOP_MID, 0, 46);
+        t->value_label = make_label(box, f.medium, COLOR_VALUE, "–");
+        lv_obj_set_width(t->value_label, w - 18);
+        lv_label_set_long_mode(t->value_label, LV_LABEL_LONG_MODE_DOTS);
+        lv_obj_set_style_text_align(t->value_label, LV_TEXT_ALIGN_CENTER, 0);
+        lv_obj_align(t->value_label, LV_ALIGN_BOTTOM_MID, 0, -8);
+      } else {
+        int x = 9;
+        if (!icon_glyph.empty()) {
+          t->icon = make_label(box, f.icons, COLOR_LABEL, icon_glyph.c_str());
+          lv_obj_align(t->icon, LV_ALIGN_LEFT_MID, 9, 0);
+          x = 47;
+        }
+        lv_obj_set_width(t->label, w - x - 9);
+        lv_obj_set_pos(t->label, x, 6);
+        t->value_label = make_label(box, f.small, COLOR_VALUE, "–");
+        lv_obj_set_width(t->value_label, w - x - 9);
+        lv_label_set_long_mode(t->value_label, LV_LABEL_LONG_MODE_DOTS);
+        lv_obj_align(t->value_label, LV_ALIGN_BOTTOM_LEFT, x, -5);
+      }
+      break;
+    }
+
     default:
       break;
   }
 
-  // an icon on the small, wide and large tiles (a square one keeps its layout; button and square switch have theirs)
-  if (type != Type::BUTTON && size != Size::Q) {
-    std::string glyph = icon_text(icon);
-    if (!glyph.empty()) this->place_icon_(*t, glyph, !name.empty(), w, h);
+  // an icon on the small, wide and large tiles (a square one keeps its layout; button and square switch have theirs;
+  // of the own layouts only a large level and a large battery take it, a status draws its own)
+  bool takes_icon = !own_layout || ((type == Type::LEVEL || type == Type::BATTERY) && size == Size::L);
+  if (type != Type::BUTTON && size != Size::Q && takes_icon && !icon_glyph.empty()) {
+    this->place_icon_(*t, icon_glyph, !name.empty(), w, h);
   }
 
   this->show_value_(*t);
@@ -546,8 +722,14 @@ void Tiles::show_value_(Tile &t) {
     lv_obj_align_to(t.value_label, t.arc, LV_ALIGN_CENTER, 0, t.size == Size::Q ? 0 : 2);
   }
 
+  // a tank or a battery without a scale of its own (min = max) shows percent
+  float lo = t.min, hi = t.max;
+  if ((t.type == Type::LEVEL || t.type == Type::BATTERY) && lo == hi) {
+    lo = 0;
+    hi = 100;
+  }
   float frac = 0;
-  if (!std::isnan(t.value) && t.max > t.min) frac = std::max(0.0f, std::min(1.0f, (t.value - t.min) / (t.max - t.min)));
+  if (!std::isnan(t.value) && hi > lo) frac = std::max(0.0f, std::min(1.0f, (t.value - lo) / (hi - lo)));
   if (t.arc != nullptr) lv_arc_set_value(t.arc, int(frac * 1000));
   if (t.bar != nullptr) lv_bar_set_value(t.bar, int(frac * 1000), LV_ANIM_OFF);
   if (t.slider != nullptr && !std::isnan(t.value) && !lv_obj_has_state(t.slider, LV_STATE_PRESSED)) {
@@ -564,6 +746,18 @@ void Tiles::show_state_(Tile &t) {
       lv_obj_add_flag(t.dot, LV_OBJ_FLAG_HIDDEN);
     }
   }
+  // the bolt of a battery: hidden until the first tile_state, then while it charges
+  if (t.bolt != nullptr) {
+    if (t.has_state && t.on) lv_obj_remove_flag(t.bolt, LV_OBJ_FLAG_HIDDEN);
+    else lv_obj_add_flag(t.bolt, LV_OBJ_FLAG_HIDDEN);
+  }
+  if (t.type == Type::STATUS) {
+    uint32_t lit = t.color != 0 ? t.color : COLOR_ACCENT;
+    if (t.icon != nullptr) lv_obj_set_style_text_color(t.icon, lv_color_hex(t.on ? lit : COLOR_LABEL), 0);
+    if (t.value_label != nullptr) lv_obj_set_style_text_color(t.value_label, lv_color_hex(t.on ? lit : COLOR_VALUE), 0);
+    this->show_background_(t);
+    return;
+  }
   if (t.sw == nullptr) return;
   if (t.on) lv_obj_add_state(t.sw, LV_STATE_CHECKED);
   else lv_obj_remove_state(t.sw, LV_STATE_CHECKED);
@@ -578,9 +772,9 @@ void Tiles::show_state_(Tile &t) {
 
 void Tiles::show_background_(Tile &t) {
   if (t.box == nullptr) return;
-  // a switch that is on lights up; else the own background or the theme
+  // a switch or a status that is on lights up; else the own background or the theme
   uint32_t bg = t.background != 0 ? t.background : COLOR_TILE;
-  if (t.type == Type::SWITCH && t.on) bg = COLOR_TILE_ON;
+  if ((t.type == Type::SWITCH || t.type == Type::STATUS) && t.on) bg = COLOR_TILE_ON;
   lv_obj_set_style_bg_color(t.box, lv_color_hex(bg), 0);
 }
 
@@ -741,7 +935,9 @@ void Tiles::draw_chart_(Tile &t) {
 
 void Tiles::set_value(int page, int slot, float value) {
   Tile *t = this->tile_(page, slot);
-  if (t == nullptr || t->type == Type::NONE || t->type == Type::SWITCH || t->type == Type::BUTTON) return;
+  if (t == nullptr || t->type == Type::NONE || t->type == Type::SWITCH || t->type == Type::BUTTON ||
+      t->type == Type::GROUP)
+    return;
   t->value = value;
   if (t->type == Type::DIMMER && !std::isnan(value)) t->value = std::max(0.0f, std::min(100.0f, value));
   this->show_value_(*t);
@@ -754,13 +950,15 @@ void Tiles::set_value(int page, int slot, float value) {
 
 void Tiles::set_text(int page, int slot, const std::string &text) {
   Tile *t = this->tile_(page, slot);
-  if (t == nullptr || t->type != Type::VALUE || t->value_label == nullptr) return;
-  lv_label_set_text(t->value_label, text.substr(0, 32).c_str());
+  if (t == nullptr || (t->type != Type::VALUE && t->type != Type::STATUS) || t->value_label == nullptr) return;
+  lv_label_set_text(t->value_label, utf8_prefix(text, 32).c_str());
 }
 
 void Tiles::set_state(int page, int slot, bool on) {
   Tile *t = this->tile_(page, slot);
-  if (t == nullptr || (t->type != Type::SWITCH && t->type != Type::DIMMER && t->type != Type::THERMOSTAT)) return;
+  if (t == nullptr || (t->type != Type::SWITCH && t->type != Type::DIMMER && t->type != Type::THERMOSTAT &&
+                       t->type != Type::BATTERY && t->type != Type::STATUS))
+    return;
   t->on = on;
   t->has_state = true;
   this->show_state_(*t);
@@ -769,12 +967,26 @@ void Tiles::set_state(int page, int slot, bool on) {
 void Tiles::show_color_(Tile &t) {
   bool own = t.color != 0;
   lv_color_t accent = lv_color_hex(own ? t.color : COLOR_ACCENT);
+  // the colour of a group is that of its title; its rows have their own (tile_item_color)
+  if (t.type == Type::GROUP) {
+    if (t.label != nullptr) lv_obj_set_style_text_color(t.label, lv_color_hex(own ? t.color : COLOR_LABEL), 0);
+    return;
+  }
+  // a status shows its colour only while it is on
+  if (t.type == Type::STATUS) {
+    this->show_state_(t);
+    return;
+  }
   // the value takes the colour only when it is set; the theme writes it white
   if (t.value_label != nullptr && t.type != Type::DIMMER) {
     lv_obj_set_style_text_color(t.value_label, own ? accent : lv_color_hex(COLOR_VALUE), 0);
   }
   if (t.arc != nullptr) lv_obj_set_style_arc_color(t.arc, accent, LV_PART_INDICATOR);
-  if (t.bar != nullptr) lv_obj_set_style_bg_color(t.bar, accent, LV_PART_INDICATOR);
+  // a battery without a colour of its own is green
+  if (t.bar != nullptr) {
+    lv_color_t fill = (t.type == Type::BATTERY && !own) ? lv_color_hex(COLOR_BATTERY) : accent;
+    lv_obj_set_style_bg_color(t.bar, fill, LV_PART_INDICATOR);
+  }
   if (t.line != nullptr) lv_obj_set_style_line_color(t.line, accent, 0);
   // toggles and sliders of switches and dimmers take the main colour too
   if (t.sw != nullptr) lv_obj_set_style_bg_color(t.sw, accent, SELECTOR_CHECKED);
@@ -811,6 +1023,127 @@ void Tiles::set_history(int page, int slot, const std::vector<float> &points) {
     if (!std::isnan(points[i])) t->history.push_back(points[i]);
   }
   this->draw_chart_(*t);
+}
+
+Item *Tiles::item_(int page, int slot, int index) {
+  Tile *t = this->tile_(page, slot);
+  if (t == nullptr || index < 0 || index >= ITEMS || !t->items[index].used) return nullptr;
+  return &t->items[index];
+}
+
+void Tiles::set_item(int page, int slot, int index, const std::string &label, const std::string &unit, int decimals) {
+  Tile *t = this->tile_(page, slot);
+  if (t == nullptr || index < 0 || index >= ITEMS) return;
+  // a group has up to 4 rows; a level and a battery one second amount (index 1), a small battery no room for it
+  bool group = t->type == Type::GROUP;
+  bool second = (t->type == Type::LEVEL || (t->type == Type::BATTERY && t->size != Size::S)) && index == 1;
+  if (!group && !second) return;
+  const Fonts &f = this->fonts_;
+  bool tall = t->size == Size::Q || t->size == Size::L;
+  Item &it = t->items[index];
+  if (!it.used) {
+    it.used = true;
+    if (group) {
+      it.base = COLOR_VALUE;
+      it.label = make_label(t->box, f.label, COLOR_LABEL, "");
+      lv_label_set_long_mode(it.label, LV_LABEL_LONG_MODE_DOTS);
+      it.value_label = make_label(t->box, t->size == Size::W ? f.medium : f.small, it.base, "–");
+      // side by side the columns are narrow: a long value ends in dots; in a row it stands right-aligned
+      if (!tall) lv_label_set_long_mode(it.value_label, LV_LABEL_LONG_MODE_DOTS);
+    } else if (t->type == Type::LEVEL) {
+      it.base = COLOR_LABEL;
+      it.value_label = make_label(t->box, f.small, it.base, "–");
+      lv_obj_set_pos(it.value_label, t->item_x, t->item_y);
+    } else {
+      // the power of a battery
+      it.base = COLOR_VALUE;
+      if (t->size == Size::W) {
+        it.value_label = make_label(t->box, f.medium, it.base, "–");
+        lv_obj_align(it.value_label, LV_ALIGN_RIGHT_MID, -9, 0);
+      } else if (t->size == Size::Q) {
+        it.value_label = make_label(t->box, f.small, it.base, "–");
+        lv_obj_align(it.value_label, LV_ALIGN_BOTTOM_RIGHT, -9, -8);
+      } else {
+        it.value_label = make_label(t->box, f.medium, it.base, "–");
+        lv_obj_set_pos(it.value_label, 150, 72);
+      }
+    }
+  }
+  if (it.label != nullptr) lv_label_set_text(it.label, utf8_prefix(label, 24).c_str());
+  it.unit = utf8_prefix(unit, 8);
+  it.decimals = std::max(0, std::min(3, decimals));
+  it.value = NAN;
+  it.color = 0;
+  lv_obj_set_style_text_color(it.value_label, lv_color_hex(it.base), 0);
+  this->show_item_(it);
+  if (group) this->layout_group_(*t);
+}
+
+void Tiles::show_item_(Item &it) {
+  if (it.value_label == nullptr) return;
+  char buf[40];
+  if (std::isnan(it.value)) snprintf(buf, sizeof(buf), "–");
+  else snprintf(buf, sizeof(buf), "%.*f%s%s", it.decimals, it.value, it.unit.empty() ? "" : " ", it.unit.c_str());
+  lv_label_set_text(it.value_label, buf);
+}
+
+// The rows of a group: in a tall tile one under the other (name left, value right), in a flat one side by side
+// (name over value). Done again for every new row, so the rows always share the tile evenly.
+void Tiles::layout_group_(Tile &t) {
+  int n = 0;
+  for (int i = 0; i < ITEMS; i++) {
+    if (t.items[i].used) n = i + 1;
+  }
+  if (n == 0) return;
+  const Fonts &f = this->fonts_;
+  int w = t.width, h = t.height;
+  if (t.size == Size::Q || t.size == Size::L) {
+    bool titled = t.label != nullptr && lv_label_get_text(t.label)[0] != '\0';
+    int top = titled ? 26 : 6;
+    int row_h = (h - top - 4) / n;
+    int lh = lv_font_get_line_height(f.label);
+    int vh = lv_font_get_line_height(f.small);
+    int label_w = w - 18 - (t.size == Size::Q ? 68 : 110);
+    for (int i = 0; i < n; i++) {
+      Item &it = t.items[i];
+      if (!it.used) continue;
+      int y = top + i * row_h;
+      lv_obj_set_width(it.label, label_w);
+      lv_obj_align(it.label, LV_ALIGN_TOP_LEFT, 9, y + (row_h - lh) / 2);
+      lv_obj_align(it.value_label, LV_ALIGN_TOP_RIGHT, -9, y + (row_h - vh) / 2);
+    }
+  } else {
+    int col_w = (w - 18) / n;
+    for (int i = 0; i < n; i++) {
+      Item &it = t.items[i];
+      if (!it.used) continue;
+      int x = 9 + i * col_w;
+      lv_obj_set_width(it.label, col_w - 4);
+      lv_obj_align(it.label, LV_ALIGN_TOP_LEFT, x, 6);
+      lv_obj_set_width(it.value_label, col_w - 4);
+      lv_obj_align(it.value_label, LV_ALIGN_BOTTOM_LEFT, x, -5);
+    }
+  }
+}
+
+void Tiles::set_item_value(int page, int slot, int index, float value) {
+  Item *it = this->item_(page, slot, index);
+  if (it == nullptr) return;
+  it->value = value;
+  this->show_item_(*it);
+}
+
+void Tiles::set_item_text(int page, int slot, int index, const std::string &text) {
+  Item *it = this->item_(page, slot, index);
+  if (it == nullptr || it->value_label == nullptr) return;
+  lv_label_set_text(it->value_label, utf8_prefix(text, 32).c_str());
+}
+
+void Tiles::set_item_color(int page, int slot, int index, int color) {
+  Item *it = this->item_(page, slot, index);
+  if (it == nullptr || it->value_label == nullptr) return;
+  it->color = static_cast<uint32_t>(color) & 0xFFFFFF;
+  lv_obj_set_style_text_color(it->value_label, lv_color_hex(it->color != 0 ? it->color : it->base), 0);
 }
 
 void Tiles::clear(int page) {

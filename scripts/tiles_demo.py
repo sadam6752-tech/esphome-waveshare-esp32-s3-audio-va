@@ -1,8 +1,9 @@
 """Fill the tile pages of a satellite with a demo layout and print the touches (docs/TILES.md).
 
 Stands in for ioBroker.satellite-display while testing the firmware: it connects next to ioBroker.assistant,
-sends two pages with every tile type and confirms each touch the way the adapter will (switch -> tile_state,
-level -> tile_value), so the screen behaves as with the adapter. Stop with Ctrl+C; the tiles stay until the
+sends two pages with the touchable tile types (and, on 2.4.0 and newer, two more with group, level, battery and
+status) and confirms each touch the way the adapter will (switch -> tile_state, level -> tile_value), so the screen
+behaves as with the adapter. Stop with Ctrl+C; the tiles stay until the
 next restart of the board or the next tile_clear.
 
     pip install aioesphomeapi
@@ -28,6 +29,31 @@ LAYOUT = [
     (2, 1, 0, 2, "q", "switch", "Kaffeemaschine", "", "coffee", 0, 0, 0),
     (2, 2, 1, 2, "s", "button", "Szene Kino", "", "movie", 0, 0, 0),
     (2, 3, 1, 3, "s", "value", "Fenster", "", "", 0, 0, 0),
+]
+
+# the tiles with items (firmware 2.4.0+, action tile_item); same columns as LAYOUT
+LAYOUT_ITEMS = [
+    (3, 0, 0, 0, "l", "group", "Temperaturen", "", "", 1, 0, 0),
+    (3, 1, 0, 2, "q", "level", "Wassertank", "%", "", 0, 0, 100),
+    (3, 2, 1, 2, "q", "battery", "Bordbatterie", "%", "", 0, 0, 100),
+    (4, 0, 0, 0, "w", "battery", "Hausbatterie", "%", "", 0, 0, 0),
+    (4, 1, 0, 1, "w", "group", "", "", "", 1, 0, 0),
+    (4, 2, 0, 2, "q", "status", "Landstrom", "V", "flash", 0, 0, 0),
+    (4, 3, 1, 2, "s", "status", "Fenster", "", "window-open", 0, 0, 0),
+    (4, 4, 1, 3, "s", "battery", "Handy", "%", "", 0, 0, 0),
+]
+# page, slot, index, label, unit, decimals
+ITEMS = [
+    (3, 0, 0, "Außen", "°C", 1),
+    (3, 0, 1, "Innen", "°C", 1),
+    (3, 0, 2, "Wasser", "°C", 1),
+    (3, 0, 3, "Kühlschrank", "°C", 1),
+    (3, 1, 1, "", "l", 0),
+    (3, 2, 1, "", "W", 0),
+    (4, 0, 1, "", "W", 0),
+    (4, 1, 0, "PV", "W", 0),
+    (4, 1, 1, "Netz", "W", 0),
+    (4, 1, 2, "Haus", "W", 0),
 ]
 
 
@@ -73,6 +99,33 @@ async def main() -> None:
     await call("tile_value", page=2, slot=0, value=7.4)
     await call("tile_state", page=2, slot=1, on=False)
     await call("tile_text", page=2, slot=3, value="zu")
+
+    if "tile_item" in actions:
+        for page, slot, col, row, size, type_, label, unit, icon, decimals, lo, hi in LAYOUT_ITEMS:
+            await call("tile_set", page=page, slot=slot, col=col, row=row, size=size, type=type_, label=label,
+                       unit=unit, icon=icon, decimals=decimals, min=float(lo), max=float(hi))
+        for page, slot, index, label, unit, decimals in ITEMS:
+            await call("tile_item", page=page, slot=slot, index=index, label=label, unit=unit, decimals=decimals)
+        for page, slot, index, value in [(3, 0, 0, 7.4), (3, 0, 1, 21.3), (3, 0, 2, 48.0), (3, 1, 1, 410.0),
+                                         (3, 2, 1, -84.0), (4, 0, 1, 1250.0), (4, 1, 0, 3120.0),
+                                         (4, 1, 1, -840.0), (4, 1, 2, 2280.0)]:
+            await call("tile_item_value", page=page, slot=slot, index=index, value=value)
+        await call("tile_item_text", page=3, slot=0, index=3, value="aus")
+        await call("tile_item_color", page=3, slot=0, index=2, color=0xF97316)
+        await call("tile_value", page=3, slot=1, value=68.0)
+        await call("tile_value", page=3, slot=2, value=17.0)
+        await call("tile_color", page=3, slot=2, color=0xEF4444)
+        await call("tile_state", page=3, slot=2, on=False)
+        await call("tile_value", page=4, slot=0, value=82.0)
+        await call("tile_state", page=4, slot=0, on=True)
+        await call("tile_value", page=4, slot=2, value=231.0)
+        await call("tile_state", page=4, slot=2, on=True)
+        await call("tile_text", page=4, slot=3, value="Offen")
+        await call("tile_state", page=4, slot=3, on=True)
+        await call("tile_color", page=4, slot=3, color=0xF59E0B)
+        await call("tile_value", page=4, slot=4, value=54.0)
+    else:
+        print("The firmware has no tile_item (older than 2.4.0): pages 3 and 4 left out")
     print("Demo sent: swipe left from the clock. Touches appear here (Ctrl+C to stop).")
 
     def on_call(msg) -> None:

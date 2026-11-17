@@ -248,6 +248,41 @@ api:
         page: int
       then:
         - lambda: tiles::get().clear(page);
+    # The items of group, level and battery tiles (docs/TILES.md "Items"): index 0-3.
+    - action: tile_item
+      variables:
+        page: int
+        slot: int
+        index: int
+        label: string
+        unit: string
+        decimals: int
+      then:
+        - lambda: tiles::get().set_item(page, slot, index, label, unit, decimals);
+    - action: tile_item_value
+      variables:
+        page: int
+        slot: int
+        index: int
+        value: float
+      then:
+        - lambda: tiles::get().set_item_value(page, slot, index, value);
+    - action: tile_item_text
+      variables:
+        page: int
+        slot: int
+        index: int
+        value: string
+      then:
+        - lambda: tiles::get().set_item_text(page, slot, index, value);
+    - action: tile_item_color
+      variables:
+        page: int
+        slot: int
+        index: int
+        color: int
+      then:
+        - lambda: tiles::get().set_item_color(page, slot, index, color);
     # Screen lock (docs/TILES.md "Screen lock"): pin_hash = SHA-256 of "satellite-display:" + PIN, 64 hex digits;
     # mode 0 = after `minutes` without a touch, 1 = when the display goes back to the clock, 2 = only by hand.
     - action: lock_config
@@ -592,11 +627,11 @@ font:
              "\U000F0176", "\U000F072A", "\U000F0AAC", "\U000F010B", "\U000F02DC", "\U000F02E3", "\U000F04B9", "\U000F09A0",
              "\U000F0599", "\U000F0594", "\U000F012C", "\U000F0156",
              "\U000F0374", "\U000F0415", "\U000F006E", "\U000F0140"]
-  # minus and plus of a square thermostat tile, smaller; the battery on the clock (10 % steps, full, alert)
+  # minus and plus of a square thermostat tile and the bolt of a small battery tile, smaller; the battery on the clock (10 % steps, full, alert)
   - file: "https://cdn.jsdelivr.net/npm/@mdi/font@7.4.47/fonts/materialdesignicons-webfont.ttf"
     id: font_icons_small
     size: 20
-    glyphs: ["\U000F0374", "\U000F0415",
+    glyphs: ["\U000F0374", "\U000F0415", "\U000F0241",
              "\U000F007A", "\U000F007B", "\U000F007C", "\U000F007D", "\U000F007E", "\U000F007F", "\U000F0080",
              "\U000F0081", "\U000F0082", "\U000F0079", "\U000F0083"]
 

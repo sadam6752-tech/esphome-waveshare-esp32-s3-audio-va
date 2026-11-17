@@ -18,9 +18,11 @@ namespace tiles {
 static const int PAGES = 4;
 static const int SLOTS = 8;
 static const size_t HISTORY = 60;
+// the extra values of a tile (tile_item): the rows of a group, the second amount of a level or a battery
+static const int ITEMS = 4;
 
 enum class Size : uint8_t { S, Q, W, L };
-enum class Type : uint8_t { NONE, VALUE, GAUGE, BAR, CHART, SWITCH, DIMMER, BUTTON, THERMOSTAT };
+enum class Type : uint8_t { NONE, VALUE, GAUGE, BAR, CHART, SWITCH, DIMMER, BUTTON, THERMOSTAT, GROUP, LEVEL, BATTERY, STATUS };
 
 struct Fonts {
   const lv_font_t *label;   // tile name, ~15 px
@@ -33,6 +35,19 @@ struct Fonts {
 
 // page 1..4, slot 0..7, input "switch" / "level" / "press" / "setpoint"
 using InputCallback = std::function<void(int page, int slot, const char *input, float value)>;
+
+// One extra value of a tile, configured by tile_item; its objects are children of the box of the tile.
+struct Item {
+  bool used{false};
+  int decimals{1};
+  std::string unit;
+  float value{NAN};
+  // colour of the value (0xRRGGBB), 0 = its own colour (base)
+  uint32_t color{0};
+  uint32_t base{0};
+  lv_obj_t *label{nullptr};
+  lv_obj_t *value_label{nullptr};
+};
 
 struct Tile {
   Type type{Type::NONE};
@@ -66,6 +81,14 @@ struct Tile {
   lv_obj_t *setpoint_label{nullptr};
   lv_obj_t *dot{nullptr};
   lv_obj_t *icon{nullptr};
+  // the bolt of a battery while it charges
+  lv_obj_t *bolt{nullptr};
+  // size of the box, and where the second amount of a level goes
+  int width{0};
+  int height{0};
+  int item_x{0};
+  int item_y{0};
+  Item items[ITEMS];
   // sends the setpoint a moment after the last press of - / +
   lv_timer_t *timer{nullptr};
   int line_w{0};
@@ -95,6 +118,12 @@ class Tiles {
   // Target temperature of a thermostat and the step of its - / + buttons.
   void set_setpoint(int page, int slot, float value, float step);
   void set_history(int page, int slot, const std::vector<float> &points);
+  // Item `index` (0-3) of a group, level or battery: its name, unit and decimals; the value shows "–" again.
+  void set_item(int page, int slot, int index, const std::string &label, const std::string &unit, int decimals);
+  void set_item_value(int page, int slot, int index, float value);
+  void set_item_text(int page, int slot, int index, const std::string &text);
+  // Colour of the value of an item (0xRRGGBB), e.g. red beyond a threshold; 0 = its own colour again.
+  void set_item_color(int page, int slot, int index, int color);
   // Removes the tiles of a page, 0 = of all pages.
   void clear(int page);
 
@@ -120,6 +149,9 @@ class Tiles {
   void show_setpoint_(Tile &t);
   void show_color_(Tile &t);
   void show_background_(Tile &t);
+  void show_item_(Item &item);
+  void layout_group_(Tile &t);
+  Item *item_(int page, int slot, int index);
   void place_icon_(Tile &t, const std::string &glyph, bool named, int w, int h);
   void draw_chart_(Tile &t);
   void send_(int index, const char *input, float value);
