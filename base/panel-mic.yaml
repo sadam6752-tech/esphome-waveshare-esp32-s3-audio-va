@@ -1,0 +1,374 @@
+###############################################################################
+# Tile panel (panel-lcd2.yaml) with a microphone: an INMP441 I2S MEMS microphone on the header, the wake
+# words and the voice assistant for ioBroker.assistant. The answer is spoken on the MAX98357A of the panel;
+# the screen shows listening / thinking / the answer over every page (top layer), a touch on it ends the
+# session.
+#
+# Wiring (right header of the ESP32-S3-Touch-LCD-2), its own I2S bus, so the MAX98357A keeps its pins:
+#   INMP441 VDD -> 3V3 (pin 1)      GND -> GND (pin 13)      L/R -> GND (left channel)
+#   SCK -> GPIO15 (pin 7)           WS -> GPIO9 (pin 12)     SD -> GPIO11 (pin 9)
+# 3.3 V only. GPIO9/11/15 are camera lines, so no camera with the microphone.
+# Tested 2026-11-22 on Panel-Mini: ioBroker 0.99, Hey Bro 0.91, Alisa 0.91-0.98 at gain_factor 4.
+# No echo cancellation: while the panel speaks or plays music the wake word is heard badly.
+###############################################################################
+
+esp32:
+  framework:
+    sdkconfig_options:
+      # as on the voice satellite: micro_wake_word runs considerably faster
+      CONFIG_SPIRAM_RODATA: "y"
+      CONFIG_SPIRAM_FETCH_INSTRUCTIONS: "y"
+
+i2s_audio:
+  - id: i2s_mic
+    i2s_bclk_pin: GPIO15
+    i2s_lrclk_pin: GPIO9
+
+microphone:
+  - platform: i2s_audio
+    id: panel_mic
+    i2s_audio_id: i2s_mic
+    i2s_din_pin: GPIO11
+    adc_type: external
+    # L/R on GND
+    channel: left
+    # the INMP441 sends 24 bits in a 32-bit slot
+    bits_per_sample: 32bit
+    sample_rate: 16000
+    # the INMP441 has a DC offset; without the correction the end of speech (VAD) was found only after ~12 s
+    correct_dc_offset: true
+
+# Which wake word listens is chosen in ioBroker.assistant (Satellites tab); the first one on a fresh flash.
+micro_wake_word:
+  id: mww
+  microphone:
+    microphone: panel_mic
+    # the INMP441 is quiet at 32 bits; raised so the wake word hears it from a few metres
+    gain_factor: 4
+  stop_after_detection: false
+  models:
+    - model: wakewords/iobroker.json
+      id: iobroker
+    - model: wakewords/hey_bro.json
+      id: hey_bro
+    - model: wakewords/alisa.json
+      id: alisa
+  vad:
+    model: https://github.com/esphome/micro-wake-word-models/raw/main/models/v2/vad.json
+  on_wake_word_detected:
+    # Two words listening: one phrase often wakes both ("Hey Bro" also wakes "Alisa" a few ms later), and the
+    # second one would end the session just started. A detection within 3 s of the last one is ignored.
+    - if:
+        condition:
+          lambda: return millis() - id(last_wake_ms) < 3000;
+        then:
+          - logger.log: "Second detection of the same phrase, ignored"
+        else:
+          - lambda: id(last_wake_ms) = millis();
+          - if:
+              condition: voice_assistant.is_running
+              # already listening or answering: the wake word ends the session
+              then:
+                - voice_assistant.stop:
+              else:
+                - if:
+                    condition: media_player.is_announcing
+                    then:
+                      - media_player.stop:
+                          announcement: true
+                    else:
+                      - script.execute: voice_wake_screen
+                      - voice_assistant.start:
+                          wake_word: !lambda return wake_word;
+
+voice_assistant:
+  id: va
+  microphone:
+    microphone: panel_mic
+    # unity: at 4 the pause after speech stayed above the silence gate of ioBroker.assistant (60), every request
+    # ran into its 12 s limit
+    gain_factor: 1
+  media_player: player
+  micro_wake_word: mww
+  use_wake_word: false
+  noise_suppression_level: 0
+  auto_gain: 0dBFS
+  volume_multiplier: 1
+  on_client_connected:
+    - micro_wake_word.start:
+  on_client_disconnected:
+    - voice_assistant.stop:
+    - script.execute:
+        id: voice_show
+        phase: 0
+        text: ""
+  on_start:
+    - mixer_speaker.apply_ducking:
+        id: media_mixing_input
+        decibel_reduction: 30
+        duration: 0s
+  on_listening:
+    - script.execute:
+        id: voice_show
+        phase: 1
+        text: ""
+  on_stt_vad_end:
+    - script.execute:
+        id: voice_show
+        phase: 2
+        text: ""
+  on_stt_end:
+    - script.execute:
+        id: voice_show
+        phase: 2
+        text: !lambda |-
+          if (x.empty()) return std::string("");
+          return "«" + x + "»";
+    - script.execute:
+        id: send_stt_text_event
+        stt_text: !lambda return x;
+  on_tts_start:
+    - script.execute:
+        id: voice_show
+        phase: 3
+        # without the hidden part of the assistant ([[...]])
+        text: !lambda |-
+          std::string text = x;
+          auto pos = text.find("[[");
+          if (pos != std::string::npos) text = text.substr(0, pos);
+          while (!text.empty() && isspace((unsigned char) text.back())) text.pop_back();
+          // only a question waits for an answer (Yes/No on the screen when it listens again)
+          id(dlg_question) = text.find('?') != std::string::npos;
+          if (text.size() > 300) text = id(dlg_question) ? "…" + text.substr(text.size() - 300) : text.substr(0, 300) + "…";
+          return text;
+  on_tts_end:
+    - script.execute:
+        id: send_tts_uri_event
+        tts_uri: !lambda return x;
+  on_error:
+    # nothing heard and a second wake word are normal, no error on the screen
+    - if:
+        condition:
+          lambda: return code != "duplicate_wake_up_detected" && code != "stt-no-text-recognized";
+        then:
+          - script.execute:
+              id: voice_show
+              phase: 4
+              text: !lambda return message;
+  on_end:
+    - wait_until:
+        not: voice_assistant.is_running
+    - wait_until:
+        condition:
+          not: media_player.is_announcing
+        timeout: 60s
+    - mixer_speaker.apply_ducking:
+        id: media_mixing_input
+        decibel_reduction: 0
+        duration: 1s
+    # the answer stays a moment to be read
+    - delay: 4s
+    - if:
+        condition:
+          not: voice_assistant.is_running
+        then:
+          - script.execute:
+              id: voice_show
+              phase: 0
+              text: ""
+
+script:
+  # A voice session wakes a dark screen, as a touch does.
+  - id: voice_wake_screen
+    then:
+      - lambda: id(lcd_last_touch) = millis();
+      - if:
+          condition: lvgl.is_paused
+          then:
+            - lvgl.resume:
+            - light.turn_on:
+                id: lcd_backlight
+                brightness: !lambda return id(lcd_brightness).state / 100.0f;
+  # The voice box over every page: phase 0 hidden, 1 listening, 2 thinking (text: what was heard),
+  # 3 the answer, 4 an error. An empty text keeps the one shown (the heard words stay while thinking).
+  - id: voice_show
+    mode: queued
+    parameters:
+      phase: int
+      text: string
+    then:
+      - lambda: |-
+          if (phase == 0) {
+            lv_obj_add_flag(id(voice_box), LV_OBJ_FLAG_HIDDEN);
+            return;
+          }
+          size_t lang = id(display_language).active_index().value_or(0) % 3;
+          static const char *const t_listen[] = {"Ich höre zu …", "Listening …", "Слушаю …"};
+          static const char *const t_think[] = {"Moment …", "Thinking …", "Думаю …"};
+          static const char *const t_error[] = {"Fehler", "Error", "Ошибка"};
+          const char *icon = "\U000F036C", *title = t_listen[lang];
+          uint32_t color = 0x38BDF8;
+          if (phase == 2) { icon = "\U000F01D8"; title = t_think[lang]; color = 0xFBBF24; }
+          if (phase == 3) { icon = "\U000F057E"; title = ""; color = 0x4ADE80; }
+          if (phase == 4) { icon = "\U000F0028"; title = t_error[lang]; color = 0xEF4444; }
+          // listening again after a question: the question stays, with Yes / No to tap
+          bool ask = phase == 1 && id(dlg_question);
+          if (ask) {
+            static const char *const t_hint[] = {"„Ja“ oder „Nein“?", "“Yes” or “no”?", "«Да» или «нет»?"};
+            static const char *const t_yes[] = {"Ja", "Yes", "Да"};
+            static const char *const t_no[] = {"Nein", "No", "Нет"};
+            title = t_hint[lang];
+            lv_label_set_text(id(lbl_confirm_yes), t_yes[lang]);
+            lv_label_set_text(id(lbl_confirm_no), t_no[lang]);
+            lv_obj_clear_flag(id(btn_confirm_yes), LV_OBJ_FLAG_HIDDEN);
+            lv_obj_clear_flag(id(btn_confirm_no), LV_OBJ_FLAG_HIDDEN);
+          } else {
+            lv_obj_add_flag(id(btn_confirm_yes), LV_OBJ_FLAG_HIDDEN);
+            lv_obj_add_flag(id(btn_confirm_no), LV_OBJ_FLAG_HIDDEN);
+          }
+          lv_label_set_text(id(lbl_voice_icon), icon);
+          lv_obj_set_style_text_color(id(lbl_voice_icon), lv_color_hex(color), 0);
+          lv_label_set_text(id(lbl_voice_title), title);
+          lv_obj_set_style_text_color(id(lbl_voice_title), lv_color_hex(color), 0);
+          if (phase == 1 && !ask) lv_label_set_text(id(lbl_voice_text), "");
+          else if (!text.empty()) lv_label_set_text(id(lbl_voice_text), text.c_str());
+          if (phase != 1 && phase != 3) id(dlg_question) = false;
+          lv_obj_clear_flag(id(voice_box), LV_OBJ_FLAG_HIDDEN);
+          lv_obj_move_foreground(id(voice_box));
+          id(lcd_last_touch) = millis();
+  # Yes/No by touch: tell the assistant (event confirm_answer, ioBroker.assistant 1.4.7+), stop listening; its
+  # answer comes as an announcement. As on the voice satellite (base/display.yaml).
+  - id: confirm_by_touch
+    parameters:
+      answer: std::string
+    then:
+      - lambda: |-
+          ESP_LOGI("confirm", "Answer by touch: %s", answer.c_str());
+          id(confirm_answer).trigger(answer);
+          lv_obj_add_flag(id(btn_confirm_yes), LV_OBJ_FLAG_HIDDEN);
+          lv_obj_add_flag(id(btn_confirm_no), LV_OBJ_FLAG_HIDDEN);
+          size_t lang = id(display_language).active_index().value_or(0) % 3;
+          static const char *const t_yes[] = {"Ja", "Yes", "Да"};
+          static const char *const t_no[] = {"Nein", "No", "Нет"};
+          bool yes = answer == "yes";
+          lv_label_set_text(id(lbl_voice_text), (std::string("«") + (yes ? t_yes[lang] : t_no[lang]) + "»").c_str());
+          id(dlg_question) = false;
+      - voice_assistant.stop:
+  # What was heard and the address of the answer, to ioBroker, as on the voice satellite.
+  - id: send_stt_text_event
+    parameters:
+      stt_text: string
+    then:
+      - homeassistant.event:
+          event: esphome.stt_text
+          data:
+            text: !lambda return stt_text;
+  - id: send_tts_uri_event
+    parameters:
+      tts_uri: string
+    then:
+      - homeassistant.event:
+          event: esphome.tts_uri
+          data:
+            uri: !lambda return tts_uri;
+
+lvgl:
+  top_layer:
+    widgets:
+      # The voice session: icon and state at the top, the heard words or the answer below. A touch ends it.
+      - obj:
+          id: voice_box
+          hidden: true
+          width: 100%
+          height: 100%
+          bg_color: 0x0B1220
+          bg_opa: COVER
+          border_width: 0
+          radius: 0
+          pad_all: 12
+          scrollable: false
+          on_click:
+            - voice_assistant.stop:
+            - media_player.stop:
+                announcement: true
+            - script.execute:
+                id: voice_show
+                phase: 0
+                text: ""
+          widgets:
+            - label:
+                id: lbl_voice_icon
+                align: TOP_LEFT
+                text_font: font_icons
+                text: "\U000F036C"
+            - label:
+                id: lbl_voice_title
+                align: TOP_LEFT
+                x: 42
+                y: 3
+                text_font: font_text
+                text: ""
+            - label:
+                id: lbl_voice_text
+                align: TOP_LEFT
+                y: 44
+                width: 100%
+                long_mode: WRAP
+                text_font: font_text
+                text_color: 0xFFFFFF
+                text: ""
+            # Answer by touch while the assistant waits for yes / no.
+            - button:
+                id: btn_confirm_yes
+                hidden: true
+                align: BOTTOM_LEFT
+                width: 130
+                height: 48
+                bg_color: 0x15803D
+                on_click:
+                  - script.execute:
+                      id: confirm_by_touch
+                      answer: "yes"
+                widgets:
+                  - label:
+                      id: lbl_confirm_yes
+                      align: CENTER
+                      text_font: font_text
+                      text_color: 0xFFFFFF
+                      text: "Ja"
+            - button:
+                id: btn_confirm_no
+                hidden: true
+                align: BOTTOM_RIGHT
+                width: 130
+                height: 48
+                bg_color: 0xB91C1C
+                on_click:
+                  - script.execute:
+                      id: confirm_by_touch
+                      answer: "no"
+                widgets:
+                  - label:
+                      id: lbl_confirm_no
+                      align: CENTER
+                      text_font: font_text
+                      text_color: 0xFFFFFF
+                      text: "Nein"
+
+# A touch on Yes/No while the assistant waits for an answer (object id confirm_answer, as on the satellite).
+event:
+  - platform: template
+    id: confirm_answer
+    name: "Confirm answer"
+    icon: "mdi:gesture-tap-button"
+    event_types: ["yes", "no"]
+
+globals:
+  # millis() of the last wake word that counted
+  - id: last_wake_ms
+    type: uint32_t
+    initial_value: "0"
+  # the last answer was a question: Yes / No when the assistant listens again
+  - id: dlg_question
+    type: bool
+    initial_value: "false"

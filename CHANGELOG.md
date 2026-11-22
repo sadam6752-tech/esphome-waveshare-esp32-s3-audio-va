@@ -2,6 +2,16 @@
 
 ## [Unreleased]
 
+## [2.5.0] - 2026-11-22
+
+### Added
+- **Tile panel with a microphone** (new firmware "panel-mic", card *With microphone* on the install page): an
+  INMP441 on the header (SCK GPIO15, WS GPIO9, SD GPIO11, own I2S bus) makes the Waveshare ESP32-S3-Touch-LCD-2 a
+  voice satellite for ioBroker.assistant. Wake words "ioBroker", "Hey Bro" and "Alisa"; the answer is spoken on
+  the MAX98357A; the screen shows listening, thinking, the heard words and the answer over every page, with Ja/Nein
+  buttons when the assistant asks (event `confirm_answer`), a touch ends the session. A dark screen wakes on the wake
+  word. One phrase that wakes two listening words at once starts one session, not a cancelled one.
+
 ## [2.4.0] - 2026-11-17
 
 ### Added

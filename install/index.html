@@ -53,13 +53,24 @@
   </div>
 
   <h2>Tile panel</h2>
-  <p>No voice: the Waveshare ESP32-S3-Touch-LCD-2 (2 inch) as a wall or desk panel for ioBroker.satellite-display
-    with the clock, four pages of tiles and the screen lock.</p>
+  <p>The Waveshare ESP32-S3-Touch-LCD-2 (2 inch) as a wall or desk panel for ioBroker.satellite-display with the
+    clock, four pages of tiles and the screen lock; with a microphone soldered on it also listens.</p>
   <div class="cards">
     <div class="card">
       <h2>ESP32-S3-Touch-LCD-2</h2>
       <p>Optional: a MAX98357A amplifier on the header P2 plays streams from ioBroker.</p>
       <esp-web-install-button manifest="firmware/panel/manifest.json">
+        <button slot="activate">Install</button>
+        <span slot="unsupported">Use Chrome or Edge on a computer.</span>
+        <span slot="not-allowed">Open this page over https.</span>
+      </esp-web-install-button>
+    </div>
+    <div class="card">
+      <h2>With microphone</h2>
+      <p>The same panel with an INMP441 microphone on the header (SCK GPIO15, WS GPIO9, SD GPIO11, L/R to GND,
+        3.3 V): also a voice satellite for ioBroker.assistant with the wake words ioBroker, Hey Bro and Alisa.
+        The answer is spoken on the MAX98357A.</p>
+      <esp-web-install-button manifest="firmware/panel-mic/manifest.json">
         <button slot="activate">Install</button>
         <span slot="unsupported">Use Chrome or Edge on a computer.</span>
         <span slot="not-allowed">Open this page over https.</span>

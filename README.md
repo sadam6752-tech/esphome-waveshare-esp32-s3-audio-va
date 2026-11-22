@@ -151,7 +151,8 @@ the clock, or only by hand with the open lock next to the gear) is set in the ad
 CST816D) into a wall or desk panel for ioBroker.satellite-display: the clock, the four pages of tiles and the screen
 lock, a system page (swipe right from the clock: Wi-Fi, IP, uptime, memory, connection to ioBroker, restart) and a
 settings page (brightness, screen off after some minutes, language). The screen turns by itself with the board (USB
-right or left, from its IMU). The board has no microphone and no speaker, so there is no voice assistant on it.
+right or left, from its IMU). The board has no microphone and no speaker of its own; with an INMP441 soldered on it
+becomes a voice satellite too (below).
 With a LiPo on the battery connector the clock shows its charge at the top right (from the voltage, so rough).
 
 **Sound (optional):** a MAX98357A I2S amplifier on the header P2 (BCLK GPIO13, LRC GPIO12, DIN GPIO14, VIN 5V, GND;
@@ -179,6 +180,26 @@ esphome -s build_path C:/ESPHome/build/panel run panel-lcd2.yaml
 The short `build_path` is needed on Windows (the paths of ESP-IDF get too long in `.esphome/build`). Wi-Fi can be set
 over USB with [ESPHome Web](https://web.esphome.io) (Connect, then "Configure Wi-Fi"); without a reachable Wi-Fi the
 panel also opens the access point "Tile Panel Setup".
+
+**Microphone (optional, 2.5.0+):** an INMP441 I2S MEMS microphone on the right header makes the panel a small voice
+satellite for ioBroker.assistant: the wake words "ioBroker", "Hey Bro" and "Alisa", the request, the spoken answer
+on the MAX98357A, and on the screen listening / thinking / the answer with Ja/Nein buttons for a question. Wiring
+(its own I2S bus, the amplifier keeps its pins; 3.3 V only):
+
+| INMP441 | Panel | Header pin |
+|---|---|---|
+| VDD | 3V3 | 1 |
+| GND | GND | 13 |
+| L/R | GND | (left channel) |
+| SCK | GPIO15 | 7 |
+| WS | GPIO9 | 12 |
+| SD | GPIO11 | 9 |
+
+Install the card *With microphone* on the install page (firmware [`release-panel-mic.yaml`](release-panel-mic.yaml),
+microphone part [`base/panel-mic.yaml`](base/panel-mic.yaml)), then add the panel in ioBroker.assistant (Satellites
+tab) as well as in ioBroker.satellite-display. There is no echo cancellation: while the panel speaks or plays music
+the wake word is heard badly. Its voice level is lower than that of the voice satellite (speech about RMS 200); far
+from the panel, lower its speech level in the satellite settings of ioBroker.assistant.
 
 ## Reminders (with pi-agent)
 

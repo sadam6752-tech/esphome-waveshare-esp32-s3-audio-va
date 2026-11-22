@@ -1,0 +1,18 @@
+# Ready-made firmware of the TILE PANEL WITH A MICROPHONE: the tile panel (release-panel.yaml) plus an INMP441
+# I2S microphone on the header, the wake words and the voice assistant for ioBroker.assistant (base/panel-mic.yaml,
+# wiring there). Built by .github/workflows/release.yml and offered on the install page.
+# To build it yourself: esphome compile release-panel-mic.yaml (needs a secrets.yaml, e.g. a copy of
+# secrets.example.yaml: the Wi-Fi in it is removed).
+
+substitutions:
+  # set by the release workflow
+  release_variant: panel-mic
+  release_build_path: ".esphome/build/sd-panel-mic-release"
+
+packages:
+  panel: !include release-panel.yaml
+  mic: !include base/panel-mic.yaml
+
+esphome:
+  project:
+    name: sadam6752-tech.tile-panel-lcd2-mic
