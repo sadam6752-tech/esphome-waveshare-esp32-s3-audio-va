@@ -2,8 +2,21 @@
 
 ## [Unreleased]
 
+## [2.5.2] - 2026-11-22
+
 ### Added
+- **Tile panel with a microphone: tap to talk over music.** While music plays, a tap on a free area of the clock
+  page (time, date, empty space; the media buttons, the gear, the lock and swipes keep working) silences the music,
+  and after 1.5 s a small microphone at the top shows that the panel listens for a wake word for 6 s. Without a
+  wake word the music comes back.
+- **Tile panel: volume scale.** The volume buttons of the media bar show a scale with the percent for 2 s.
 - **Install page shows the version** of every firmware (from its manifest, linked to its release).
+
+### Changed
+- **Tile panel with a microphone: no wake word from the music.** Without echo cancellation words in songs woke the
+  panel now and then; while music plays a wake word now counts only after the tap on the clock page.
+- **Tile panel with a microphone: music fully silent** while the panel listens to a question and answers (was
+  -30 dB, under which the microphone heard the radio more than the voice).
 
 ## [2.5.1] - 2026-11-22
 

@@ -9,8 +9,8 @@
 #   SCK -> GPIO15 (pin 7)           WS -> GPIO9 (pin 12)     SD -> GPIO11 (pin 9)
 # 3.3 V only. GPIO9/11/15 are camera lines, so no camera with the microphone.
 # Tested 2026-11-22 on Panel-Mini: ioBroker 0.99, Hey Bro 0.91, Alisa 0.91-0.98 at gain_factor 4.
-# No echo cancellation: the panel's own answer wakes "Alisa", so a wake word is ignored while it speaks; with
-# music playing the wake word is heard badly.
+# No echo cancellation: the panel's own answer wakes "Alisa", so a wake word is ignored while it speaks; while
+# music plays it counts only after a tap on the clock page, which silences the music for a few seconds.
 ###############################################################################
 
 esp32:
@@ -71,12 +71,16 @@ micro_wake_word:
               # "Alisa" (seen at 1.00 a second into a Russian answer), which cut every such answer after its first
               # words. While it speaks, and while the assistant thinks, a wake word is ignored; a touch on the
               # voice box still ends both.
+              # Music works the same way: words in a song woke the panel now and then. While music plays a wake
+              # word counts only in the window a tap on the clock opens (touch_listen).
               condition:
                 lambda: |-
                   return id(player)->state == media_player::MEDIA_PLAYER_STATE_ANNOUNCING ||
-                         (id(va)->is_running() && id(voice_phase) >= 2);
+                         (id(va)->is_running() && id(voice_phase) >= 2) ||
+                         (!id(va)->is_running() && id(player)->state == media_player::MEDIA_PLAYER_STATE_PLAYING &&
+                          !id(touch_listen)->is_running());
               then:
-                - logger.log: "Wake word while the panel speaks or the assistant thinks, ignored"
+                - logger.log: "Wake word while the panel speaks, thinks or plays music, ignored"
               else:
                 - if:
                     condition: voice_assistant.is_running
@@ -111,9 +115,11 @@ voice_assistant:
         phase: 0
         text: ""
   on_start:
+    # the microphone sits next to the speaker: at -30 dB it still heard the radio more than the voice, so the
+    # music goes all the way down while the panel listens and answers
     - mixer_speaker.apply_ducking:
         id: media_mixing_input
-        decibel_reduction: 30
+        decibel_reduction: 60
         duration: 0s
   on_listening:
     - script.execute:
@@ -186,6 +192,40 @@ voice_assistant:
               text: ""
 
 script:
+  # Over loud music the microphone cannot hear a wake word. A tap on the free area of the clock page (not on a
+  # button such as the volume of the media bar) while music plays silences it; a small microphone at the top
+  # that takes no touches shows for 6 s once the panel listens. A wake word in that time starts the session as
+  # usual (its end undoes the ducking), otherwise the music comes back. Not while the screen is locked. LVGL
+  # sends no click for a swipe, so a page change does not start it.
+  - id: touch_listen
+    mode: restart
+    then:
+      - if:
+          condition:
+            lambda: |-
+              return id(page_clock)->is_showing() && !screenlock::get().locked() && !id(va)->is_running() &&
+                     id(voice_phase) == 0 && id(player)->state == media_player::MEDIA_PLAYER_STATE_PLAYING;
+          then:
+            - mixer_speaker.apply_ducking:
+                id: media_mixing_input
+                decibel_reduction: 60
+                duration: 0s
+            # The speaker still plays its buffer for ~0.5 s, and the wake word front end needs about a second to
+            # settle from loud music to a quiet room: a wake word said at once was heard badly. The microphone
+            # shows when the panel really listens.
+            - delay: 1500ms
+            - lambda: lv_obj_clear_flag(id(listen_hint), LV_OBJ_FLAG_HIDDEN);
+            - delay: 6s
+      - lambda: lv_obj_add_flag(id(listen_hint), LV_OBJ_FLAG_HIDDEN);
+      # a wake word in the meantime started a session: its end undoes the ducking
+      - if:
+          condition:
+            lambda: return !id(va)->is_running() && id(voice_phase) == 0;
+          then:
+            - mixer_speaker.apply_ducking:
+                id: media_mixing_input
+                decibel_reduction: 0
+                duration: 1s
   # A voice session wakes a dark screen, as a touch does.
   - id: voice_wake_screen
     then:
@@ -207,6 +247,7 @@ script:
     then:
       - lambda: |-
           id(voice_phase) = phase;
+          lv_obj_add_flag(id(listen_hint), LV_OBJ_FLAG_HIDDEN);
           if (phase == 0) {
             lv_obj_add_flag(id(voice_box), LV_OBJ_FLAG_HIDDEN);
             return;
@@ -284,6 +325,20 @@ script:
 lvgl:
   top_layer:
     widgets:
+      # touch_listen: the panel waits for a wake word under quiet music. Takes no touches.
+      - label:
+          id: listen_hint
+          hidden: true
+          clickable: false
+          align: TOP_MID
+          y: 6
+          bg_color: 0x0B1220
+          bg_opa: 80%
+          radius: 18
+          pad_all: 6
+          text_font: font_icons
+          text_color: 0x38BDF8
+          text: "\U000F036C"
       # The voice session: icon and state at the top, the heard words or the answer below. A touch ends it.
       - obj:
           id: voice_box
@@ -371,6 +426,22 @@ event:
     name: "Confirm answer"
     icon: "mdi:gesture-tap-button"
     event_types: ["yes", "no"]
+
+# A click on the clock page itself: LVGL gives it to the page only where no button lies (time, date, free area),
+# so the buttons of the media bar, the gear and the lock keep their own touch. Hooked once LVGL runs.
+interval:
+  - interval: 1s
+    then:
+      - lambda: |-
+          static bool hooked = false;
+          if (hooked || id(page_clock)->obj == nullptr) return;
+          hooked = true;
+          lv_obj_add_event_cb(id(page_clock)->obj, [](lv_event_t *e) {
+            if (id(voice_phase) != 0 || id(va)->is_running()) return;
+            if (id(player)->state != media_player::MEDIA_PLAYER_STATE_PLAYING) return;
+            if (screenlock::get().locked()) return;
+            id(touch_listen)->execute();
+          }, LV_EVENT_CLICKED, nullptr);
 
 globals:
   # millis() of the last wake word that counted

@@ -862,6 +862,7 @@ lvgl:
                 shadow_width: 0
                 on_click:
                   - media_player.volume_down: player
+                  - script.execute: show_volume
                 widgets:
                   - label:
                       align: CENTER
@@ -879,12 +880,48 @@ lvgl:
                 shadow_width: 0
                 on_click:
                   - media_player.volume_up: player
+                  - script.execute: show_volume
                 widgets:
                   - label:
                       align: CENTER
                       text_font: font_icons
                       text_color: 0xFFFFFF
                       text: "\U000F075D"
+        # The volume while it is changed (show_volume): a scale with the percent above the media bar.
+        - obj:
+            id: volume_box
+            hidden: true
+            clickable: false
+            align: BOTTOM_MID
+            y: -48
+            width: 220
+            height: 30
+            bg_color: 0x111827
+            bg_opa: COVER
+            border_width: 0
+            radius: 8
+            pad_all: 0
+            scrollable: false
+            widgets:
+              - bar:
+                  id: volume_bar
+                  align: LEFT_MID
+                  x: 10
+                  width: 150
+                  height: 10
+                  min_value: 0
+                  max_value: 100
+                  value: 0
+                  bg_color: 0x334155
+                  indicator:
+                    bg_color: 0x38BDF8
+              - label:
+                  id: lbl_volume
+                  align: RIGHT_MID
+                  x: -10
+                  text_font: font_small
+                  text_color: 0xE2E8F0
+                  text: ""
         # last widget, so it lies over all others: while locked a touch opens the keypad
         - obj:
             id: lock_catcher
@@ -1558,6 +1595,18 @@ script:
             - lambda: id(url_after_restart) = next_url;
             - delay: 100ms
             - lambda: App.safe_reboot();
+  # The volume buttons of the media bar: the scale for 2 s after the last press.
+  - id: show_volume
+    mode: restart
+    then:
+      - delay: 50ms
+      - lambda: |-
+          int v = int(id(player)->volume * 100 + 0.5f);
+          lv_bar_set_value(id(volume_bar), v, LV_ANIM_OFF);
+          lv_label_set_text(id(lbl_volume), (to_string(v) + " %").c_str());
+          lv_obj_clear_flag(id(volume_box), LV_OBJ_FLAG_HIDDEN);
+      - delay: 2s
+      - lambda: lv_obj_add_flag(id(volume_box), LV_OBJ_FLAG_HIDDEN);
   # what the player does, to ioBroker (playing / paused / idle, volume 0..100)
   - id: send_media_state
     mode: queued
