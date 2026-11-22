@@ -23,6 +23,8 @@
       background: var(--accent); color: #fff; border: 0; border-radius: 8px; padding: 10px 16px; font-size: 1rem;
       cursor: pointer; margin-top: 8px;
     }
+    .ver { font-size: 0.9rem; margin: 0 0 12px; }
+    .ver a { color: var(--accent); }
   </style>
 </head>
 <body>
@@ -92,5 +94,25 @@
   </ol>
   <p><a href="https://github.com/sadam6752-tech/esphome-waveshare-esp32-s3-audio-va">Source and documentation</a></p>
 </main>
+<script>
+  // the version each Install button flashes, from its manifest (the release workflow writes it)
+  const REPO = "https://github.com/sadam6752-tech/esphome-waveshare-esp32-s3-audio-va";
+  for (const button of document.querySelectorAll("esp-web-install-button")) {
+    const line = document.createElement("p");
+    line.className = "ver";
+    button.before(line);
+    fetch(button.getAttribute("manifest"), { cache: "no-cache" })
+      .then((r) => (r.ok ? r.json() : Promise.reject(r.status)))
+      .then((m) => {
+        if (!m.version) return;
+        line.textContent = "Version ";
+        const link = document.createElement("a");
+        link.href = `${REPO}/releases/tag/v${m.version}`;
+        link.textContent = m.version;
+        line.append(link);
+      })
+      .catch(() => line.remove());
+  }
+</script>
 </body>
 </html>

@@ -2,6 +2,9 @@
 
 ## [Unreleased]
 
+### Added
+- **Install page shows the version** of every firmware (from its manifest, linked to its release).
+
 ## [2.5.1] - 2026-11-22
 
 ### Fixed
