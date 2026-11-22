@@ -9,7 +9,8 @@
 #   SCK -> GPIO15 (pin 7)           WS -> GPIO9 (pin 12)     SD -> GPIO11 (pin 9)
 # 3.3 V only. GPIO9/11/15 are camera lines, so no camera with the microphone.
 # Tested 2026-11-22 on Panel-Mini: ioBroker 0.99, Hey Bro 0.91, Alisa 0.91-0.98 at gain_factor 4.
-# No echo cancellation: while the panel speaks or plays music the wake word is heard badly.
+# No echo cancellation: the panel's own answer wakes "Alisa", so a wake word is ignored while it speaks; with
+# music playing the wake word is heard badly.
 ###############################################################################
 
 esp32:
@@ -66,16 +67,22 @@ micro_wake_word:
         else:
           - lambda: id(last_wake_ms) = millis();
           - if:
-              condition: voice_assistant.is_running
-              # already listening or answering: the wake word ends the session
+              # No echo cancellation and the microphone sits next to the speaker: the panel's own answer wakes
+              # "Alisa" (seen at 1.00 a second into a Russian answer), which cut every such answer after its first
+              # words. While it speaks, and while the assistant thinks, a wake word is ignored; a touch on the
+              # voice box still ends both.
+              condition:
+                lambda: |-
+                  return id(player)->state == media_player::MEDIA_PLAYER_STATE_ANNOUNCING ||
+                         (id(va)->is_running() && id(voice_phase) >= 2);
               then:
-                - voice_assistant.stop:
+                - logger.log: "Wake word while the panel speaks or the assistant thinks, ignored"
               else:
                 - if:
-                    condition: media_player.is_announcing
+                    condition: voice_assistant.is_running
+                    # still listening: the wake word ends the session
                     then:
-                      - media_player.stop:
-                          announcement: true
+                      - voice_assistant.stop:
                     else:
                       - script.execute: voice_wake_screen
                       - voice_assistant.start:
@@ -85,9 +92,10 @@ voice_assistant:
   id: va
   microphone:
     microphone: panel_mic
-    # unity: at 4 the pause after speech stayed above the silence gate of ioBroker.assistant (60), every request
-    # ran into its 12 s limit
-    gain_factor: 1
+    # at 4 the pause after speech stayed above the silence gate of ioBroker.assistant (60), every request ran
+    # into its 12 s limit; at 1 the voice peaked at only 120-190 against the speech gate 100, quieter syllables
+    # fell under 60 and a question was closed in the middle. 2 sits between the two.
+    gain_factor: 2
   media_player: player
   micro_wake_word: mww
   use_wake_word: false
@@ -198,6 +206,7 @@ script:
       text: string
     then:
       - lambda: |-
+          id(voice_phase) = phase;
           if (phase == 0) {
             lv_obj_add_flag(id(voice_box), LV_OBJ_FLAG_HIDDEN);
             return;
@@ -372,3 +381,7 @@ globals:
   - id: dlg_question
     type: bool
     initial_value: "false"
+  # the phase voice_show shows (0 hidden, 1 listening, 2 thinking, 3 answer, 4 error)
+  - id: voice_phase
+    type: int
+    initial_value: "0"

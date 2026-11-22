@@ -2,6 +2,17 @@
 
 ## [Unreleased]
 
+## [2.5.1] - 2026-11-22
+
+### Fixed
+- **Tile panel with a microphone: answers cut after the first words.** Without echo cancellation the microphone
+  next to the speaker heard the panel's own answer as the wake word "Alisa" and stopped it about a second in. While
+  the panel speaks, and while the assistant thinks, a wake word is now ignored; a touch on the voice box still ends
+  both.
+- **Tile panel with a microphone: questions closed in the middle.** The voice reached only 120-190 against the speech
+  gate 100 of ioBroker.assistant, so quieter syllables counted as the pause after the question. The microphone gain
+  for the question is doubled (wake words unchanged).
+
 ## [2.5.0] - 2026-11-22
 
 ### Added
