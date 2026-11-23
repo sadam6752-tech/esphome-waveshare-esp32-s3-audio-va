@@ -41,6 +41,8 @@ static int g_cell_w = 151;
 static int cell_w() { return g_cell_w; }
 static int wide_w() { return 2 * g_cell_w + 6; }
 static int col_x(int col) { return 6 + col * (g_cell_w + 6); }
+// the arc of a tall thermostat (size t): as wide as the cell allows, at most 100 px
+static int thermostat_tall_arc() { return std::min(g_cell_w - 16, 100); }
 static int row_y(int row) { return 6 + row * 117 / 2; }
 
 // Icons that the font of base/display.yaml contains (font_icons); the same list is in docs/TILES.md.
@@ -94,6 +96,7 @@ static bool parse_size(const std::string &s, Size &size, int &cols, int &rows) {
   else if (s == "q") { size = Size::Q; cols = 1; rows = 2; }
   else if (s == "w") { size = Size::W; cols = 2; rows = 1; }
   else if (s == "l") { size = Size::L; cols = 2; rows = 2; }
+  else if (s == "t") { size = Size::T; cols = 1; rows = 4; }
   else if (s == "f") { size = Size::F; cols = 2; rows = 4; }
   else return false;
   return true;
@@ -101,7 +104,7 @@ static bool parse_size(const std::string &s, Size &size, int &cols, int &rows) {
 
 static void cells(Size size, int &cols, int &rows) {
   cols = (size == Size::W || size == Size::L || size == Size::F) ? 2 : 1;
-  rows = size == Size::F ? 4 : ((size == Size::Q || size == Size::L) ? 2 : 1);
+  rows = (size == Size::F || size == Size::T) ? 4 : ((size == Size::Q || size == Size::L) ? 2 : 1);
 }
 
 static bool parse_type(const std::string &s, Type &type) {
@@ -123,6 +126,8 @@ static bool parse_type(const std::string &s, Type &type) {
 
 // which sizes a type comes in
 static bool size_allowed(Type type, Size size) {
+  // the tall and the whole-page size are for a thermostat only
+  if ((size == Size::T || size == Size::F) && type != Type::THERMOSTAT) return false;
   switch (type) {
     case Type::VALUE: return size != Size::F;
     case Type::GAUGE: return size == Size::Q || size == Size::L;
@@ -131,7 +136,7 @@ static bool size_allowed(Type type, Size size) {
     case Type::SWITCH: return size != Size::L && size != Size::F;
     case Type::DIMMER: return size == Size::W || size == Size::L;
     case Type::BUTTON: return size != Size::L && size != Size::F;
-    case Type::THERMOSTAT: return size == Size::Q || size == Size::L || size == Size::F;
+    case Type::THERMOSTAT: return size == Size::Q || size == Size::T || size == Size::L || size == Size::F;
     case Type::GROUP: return size != Size::F;
     case Type::LEVEL: return size == Size::Q || size == Size::L;
     case Type::BATTERY: return size != Size::F;
@@ -432,7 +437,24 @@ bool Tiles::set(int page, int slot, int col, int row, const std::string &size_na
       lv_obj_add_flag(dot, LV_OBJ_FLAG_HIDDEN);
 
       int code = index * 2;
-      if (size == Size::Q) {
+      if (size == Size::T) {
+        // half the width, the whole height: the arc at the top, the setpoint under it, - and + side by side below
+        int d = thermostat_tall_arc();
+        lv_obj_t *arc = make_arc(box, d);
+        t->arc = arc;
+        lv_obj_set_pos(arc, (w - d) / 2, 30);
+        lv_obj_set_style_arc_width(arc, 10, LV_PART_MAIN);
+        lv_obj_set_style_arc_width(arc, 10, LV_PART_INDICATOR);
+        t->value_label = make_label(box, w >= 140 ? f.medium : f.small, COLOR_VALUE, "–");
+        lv_obj_align_to(t->value_label, arc, LV_ALIGN_CENTER, 0, 0);
+        int bw = (w - 18) / 2;
+        lv_obj_t *minus = make_step_button(box, f.icons, GLYPH_MINUS, code, bw, 44);
+        lv_obj_t *plus = make_step_button(box, f.icons, GLYPH_PLUS, code + STEP_UP, bw, 44);
+        lv_obj_align(minus, LV_ALIGN_BOTTOM_LEFT, 6, -6);
+        lv_obj_align(plus, LV_ALIGN_BOTTOM_RIGHT, -6, -6);
+        t->setpoint_label = make_label(box, f.medium, COLOR_VALUE, "–");
+        lv_obj_align(t->setpoint_label, LV_ALIGN_TOP_MID, 0, 30 + d + 8);
+      } else if (size == Size::Q) {
         // a bigger arc; the target and - / + small, low in the gap at the bottom of the arc
         int d = 82;
         lv_obj_t *arc = make_arc(box, d);
@@ -833,7 +855,7 @@ void Tiles::place_icon_(Tile &t, const std::string &glyph, bool named, int w, in
   t.icon = make_label(t.box, f.icons, COLOR_LABEL, glyph.c_str());
   if (t.label != nullptr && !named) lv_obj_add_flag(t.label, LV_OBJ_FLAG_HIDDEN);
 
-  if (t.size == Size::L || t.size == Size::F) {
+  if (t.size == Size::L || t.size == Size::F || t.size == Size::T) {
     lv_obj_set_pos(t.icon, 9, 4);
     if (t.label != nullptr) {
       lv_obj_set_width(t.label, lv_obj_get_width(t.label) - ICON_W);
@@ -921,7 +943,9 @@ void Tiles::show_setpoint_(Tile &t) {
     snprintf(buf, sizeof(buf), "%.*f%s%s", dec, t.setpoint, t.unit.empty() ? "" : " ", t.unit.c_str());
   }
   lv_label_set_text(t.setpoint_label, buf);
-  if (t.size == Size::Q) {
+  if (t.size == Size::T) {
+    lv_obj_align(t.setpoint_label, LV_ALIGN_TOP_MID, 0, 30 + thermostat_tall_arc() + 8);
+  } else if (t.size == Size::Q) {
     lv_obj_align(t.setpoint_label, LV_ALIGN_BOTTOM_MID, 0, -3);
   } else if (t.size == Size::F) {
     lv_obj_align(t.setpoint_label, LV_ALIGN_BOTTOM_MID, 0, -14);

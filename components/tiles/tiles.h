@@ -21,8 +21,8 @@ static const size_t HISTORY = 60;
 // the extra values of a tile (tile_item): the rows of a group, the second amount of a level or a battery
 static const int ITEMS = 4;
 
-// F: the whole page (2 x 4 cells), only a thermostat
-enum class Size : uint8_t { S, Q, W, L, F };
+// T: half the width over the whole height (1 x 4 cells), F: the whole page (2 x 4 cells); both only a thermostat
+enum class Size : uint8_t { S, Q, W, L, F, T };
 enum class Type : uint8_t { NONE, VALUE, GAUGE, BAR, CHART, SWITCH, DIMMER, BUTTON, THERMOSTAT, GROUP, LEVEL, BATTERY, STATUS };
 
 struct Fonts {

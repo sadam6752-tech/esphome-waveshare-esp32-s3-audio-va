@@ -2,6 +2,13 @@
 
 ## [Unreleased]
 
+## [2.6.2] - 2026-11-23
+
+### Added
+- **Tiles: a tall thermostat** (size `t`, 1 x 4 cells: half the width over the whole page): the arc with the
+  temperature at the top, the target under it, large - and + below. A thermostat now comes in 1 x 2, 1 x 4, 2 x 2
+  and 2 x 4.
+
 ## [2.6.1] - 2026-11-23
 
 ### Fixed
