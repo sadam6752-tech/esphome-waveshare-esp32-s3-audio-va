@@ -2,6 +2,12 @@
 
 ## [Unreleased]
 
+## [2.6.1] - 2026-11-23
+
+### Fixed
+- **Tile panel 1.54: the screen sometimes stopped turning.** Now and then the IMU did not answer its setup at boot
+  (like the ES7210 before); like the ES7210 it is now set up again every 2 s until it answers.
+
 ## [2.6.0] - 2026-11-23
 
 ### Added

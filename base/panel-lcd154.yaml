@@ -213,19 +213,22 @@ interval:
             id(lvgl_comp)->set_rotation(rotation);
             ESP_LOGI("panel", "IMU %d degrees: screen turned to %d", angle, rotation);
           }
-  # The ES7210 sometimes does not answer its setup at boot (seen after an OTA restart, once after a USB flash; the
-  # bus scan finds it at 0x40 a moment later) and stays without microphones until a restart. Its setup is run
-  # again every 2 s until it goes through.
+  # Now and then a chip on the I2C bus does not answer its setup at boot (the ES7210 after an OTA restart, once after
+  # a USB flash; the IMU QMI8658 once, so the screen stopped turning; the bus scan finds both a moment later) and
+  # stays failed until a restart. A failed one is set up again every 2 s until it goes through.
   - interval: 2s
     then:
       - lambda: |-
-          static int tries = 0;
-          if (!id(adc_mic)->is_failed() || tries >= 30) return;
-          tries++;
-          id(adc_mic)->reset_to_construction_state();
-          id(adc_mic)->setup();
-          if (id(adc_mic)->is_failed()) ESP_LOGW("panel", "ES7210 setup failed again (try %d)", tries);
-          else ESP_LOGI("panel", "ES7210 set up on try %d", tries);
+          struct Retry { Component *c; const char *name; int tries; };
+          static Retry chips[] = {{id(adc_mic), "ES7210", 0}, {id(imu), "QMI8658", 0}};
+          for (auto &r : chips) {
+            if (!r.c->is_failed() || r.tries >= 30) continue;
+            r.tries++;
+            r.c->reset_to_construction_state();
+            r.c->setup();
+            if (r.c->is_failed()) ESP_LOGW("panel", "%s setup failed again (try %d)", r.name, r.tries);
+            else ESP_LOGI("panel", "%s set up on try %d", r.name, r.tries);
+          }
   - interval: 200ms
     then:
       - lambda: |-
