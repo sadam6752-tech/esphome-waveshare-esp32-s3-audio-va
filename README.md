@@ -201,6 +201,16 @@ tab) as well as in ioBroker.satellite-display. There is no echo cancellation: wh
 the wake word is heard badly. Its voice level is lower than that of the voice satellite (speech about RMS 200); far
 from the panel, lower its speech level in the satellite settings of ioBroker.assistant.
 
+### Tile panel 1.54 (Waveshare ESP32-S3-Touch-LCD-1.54)
+
+The [ESP32-S3-Touch-LCD-1.54](https://docs.waveshare.com/ESP32-S3-Touch-LCD-1.54) in its square case (240 x 240,
+touch) has the audio of the voice satellite on board (ES8311, speaker, ES7210 with two microphones): the card
+*ESP32-S3-Touch-LCD-1.54* on the install page (firmware [`release-panel154.yaml`](release-panel154.yaml), board
+part [`base/panel-lcd154.yaml`](base/panel-lcd154.yaml)) gives the clock, the tiles, the screen lock and the voice
+of the panel with a microphone, no soldering. The grid of the tiles is the same 2 x 4 (cells 111 x 52 px: four
+square tiles fill a page), a thermostat of size `f` fills the whole page; the screen turns with the board to all
+four sides. Add it in ioBroker.assistant and ioBroker.satellite-display like the other panels.
+
 ## Reminders (with pi-agent)
 
 Asked on the satellite ("Erinnere mich in zehn Minuten daran, die Wäsche aufzuhängen"), pi-agent 0.9.5+ sets the

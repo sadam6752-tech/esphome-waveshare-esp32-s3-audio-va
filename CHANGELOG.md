@@ -2,6 +2,21 @@
 
 ## [Unreleased]
 
+## [2.6.0] - 2026-11-23
+
+### Added
+- **Tile panel 1.54** (new firmware "panel154", card *ESP32-S3-Touch-LCD-1.54* on the install page): the Waveshare
+  ESP32-S3-Touch-LCD-1.54 in its square case (240 x 240) as a tile panel and voice satellite. Its own ES8311,
+  speaker and ES7210 with two microphones (shared I2S clock as on the voice satellite), so no soldering; clock,
+  four pages of tiles, the screen lock and the voice of the panel with a microphone. The grid of the tiles stays
+  2 columns x 4 rows (cells 111 x 52 px), so the editor of the adapter works unchanged. The screen turns with the
+  board to all four sides (IMU).
+- **Tiles: a thermostat over the whole page** (size `f`, 2 x 4 cells): a big arc with the temperature and large
+  - / + buttons.
+
+### Changed
+- **Tile panel with a microphone: no wake word while the screen is locked.**
+
 ## [2.5.2] - 2026-11-22
 
 ### Added

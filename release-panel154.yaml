@@ -1,0 +1,19 @@
+# Ready-made firmware of the 1.54 INCH TILE PANEL (Waveshare ESP32-S3-Touch-LCD-1.54): the tile panel
+# (release-panel.yaml) with the voice of base/panel-mic.yaml on the audio of this board (base/panel-lcd154.yaml,
+# pins there). Built by .github/workflows/release.yml and offered on the install page.
+# To build it yourself: esphome compile release-panel154.yaml (needs a secrets.yaml, e.g. a copy of
+# secrets.example.yaml: the Wi-Fi in it is removed).
+
+substitutions:
+  # set by the release workflow
+  release_variant: panel154
+  release_build_path: ".esphome/build/sd-panel154-release"
+
+packages:
+  panel: !include release-panel.yaml
+  mic: !include base/panel-mic.yaml
+  board: !include base/panel-lcd154.yaml
+
+esphome:
+  project:
+    name: sadam6752-tech.tile-panel-lcd154

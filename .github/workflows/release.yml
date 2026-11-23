@@ -29,7 +29,7 @@ jobs:
     runs-on: ubuntu-latest
     strategy:
       matrix:
-        variant: [display, core, panel, panel-mic]
+        variant: [display, core, panel, panel-mic, panel154]
     steps:
       - uses: actions/checkout@v7
 
@@ -108,6 +108,8 @@ jobs:
           cp site/firmware/panel/firmware.ota.bin "assets/tile-panel-lcd2-$v.ota.bin"
           cp site/firmware/panel-mic/firmware.factory.bin "assets/tile-panel-lcd2-mic-$v.factory.bin"
           cp site/firmware/panel-mic/firmware.ota.bin "assets/tile-panel-lcd2-mic-$v.ota.bin"
+          cp site/firmware/panel154/firmware.factory.bin "assets/tile-panel-lcd154-$v.factory.bin"
+          cp site/firmware/panel154/firmware.ota.bin "assets/tile-panel-lcd154-$v.ota.bin"
           find site assets -type f
 
       - name: Release assets

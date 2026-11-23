@@ -22,6 +22,10 @@ one cell is 151 × 52 px.
 | `q`  | 1 × 2               | 151 × 111 | gauge, big value    |
 | `w`  | 2 × 1               | 308 × 52  | power with a chart  |
 | `l`  | 2 × 2               | 308 × 111 | 24 h chart          |
+| `f`  | 2 × 4 (whole page)  | 308 × 228 | thermostat          |
+
+The 1.54 inch panel (240 × 240, firmware 2.6.0+) has the same grid with narrower cells: 111 × 52 px, so `s` 111 × 52,
+`q` 111 × 111 (four of them fill a page), `w` 228 × 52, `l` 228 × 111, `f` 228 × 228.
 
 A page holds up to **8 tiles** (slot 0–7); 4 pages give 32 tiles. A tile is placed by its top left cell
 (`col` 0–1, `row` 0–3). A tile that leaves the grid or covers another one is refused with a warning
@@ -38,7 +42,7 @@ in the log.
 | `switch` | label, toggle (lit tile when on)       | s q w       | toggle → `switch`        |
 | `dimmer` | label, toggle, slider, percent         | w l         | toggle → `switch`, slider → `level` |
 | `button` | icon, label                            | s q w       | press → `press`          |
-| `thermostat` | label, arc with the current temperature, − target +, relay dot | q l | − / + → `setpoint` |
+| `thermostat` | label, arc with the current temperature, − target +, relay dot | q l f | − / + → `setpoint` |
 | `group`  | a title and 1–4 rows "label … value" (items) | s q w l | none |
 | `level`  | label, a vertical tank from min to max with marks at 25/50/75 %, value, a second amount (item 1) | q l | none |
 | `battery` | label, a battery symbol filled from min to max, a bolt while charging, value, power (item 1) | s q w l | none |

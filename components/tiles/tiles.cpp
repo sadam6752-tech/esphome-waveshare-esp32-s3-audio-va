@@ -35,8 +35,12 @@ static const uint32_t SETPOINT_DELAY_MS = 1000;
 static const lv_style_selector_t SELECTOR_CHECKED =
     static_cast<lv_style_selector_t>(LV_PART_INDICATOR) | static_cast<lv_style_selector_t>(LV_STATE_CHECKED);
 
-// grid: 2 columns x 4 rows, 6 px margin and gap, a cell is 151 x 52.5 px
-static int col_x(int col) { return 6 + col * 157; }
+// grid: 2 columns x 4 rows, 6 px margin and gap, a cell is 151 x 52.5 px on a 320 px wide screen
+// (111 x 52.5 on the 240 px of the 1.54 inch panel, set_screen_width)
+static int g_cell_w = 151;
+static int cell_w() { return g_cell_w; }
+static int wide_w() { return 2 * g_cell_w + 6; }
+static int col_x(int col) { return 6 + col * (g_cell_w + 6); }
 static int row_y(int row) { return 6 + row * 117 / 2; }
 
 // Icons that the font of base/display.yaml contains (font_icons); the same list is in docs/TILES.md.
@@ -90,13 +94,14 @@ static bool parse_size(const std::string &s, Size &size, int &cols, int &rows) {
   else if (s == "q") { size = Size::Q; cols = 1; rows = 2; }
   else if (s == "w") { size = Size::W; cols = 2; rows = 1; }
   else if (s == "l") { size = Size::L; cols = 2; rows = 2; }
+  else if (s == "f") { size = Size::F; cols = 2; rows = 4; }
   else return false;
   return true;
 }
 
 static void cells(Size size, int &cols, int &rows) {
-  cols = (size == Size::W || size == Size::L) ? 2 : 1;
-  rows = (size == Size::Q || size == Size::L) ? 2 : 1;
+  cols = (size == Size::W || size == Size::L || size == Size::F) ? 2 : 1;
+  rows = size == Size::F ? 4 : ((size == Size::Q || size == Size::L) ? 2 : 1);
 }
 
 static bool parse_type(const std::string &s, Type &type) {
@@ -119,18 +124,18 @@ static bool parse_type(const std::string &s, Type &type) {
 // which sizes a type comes in
 static bool size_allowed(Type type, Size size) {
   switch (type) {
-    case Type::VALUE: return true;
+    case Type::VALUE: return size != Size::F;
     case Type::GAUGE: return size == Size::Q || size == Size::L;
-    case Type::BAR: return true;
-    case Type::CHART: return size != Size::Q;
-    case Type::SWITCH: return size != Size::L;
+    case Type::BAR: return size != Size::F;
+    case Type::CHART: return size != Size::Q && size != Size::F;
+    case Type::SWITCH: return size != Size::L && size != Size::F;
     case Type::DIMMER: return size == Size::W || size == Size::L;
-    case Type::BUTTON: return size != Size::L;
-    case Type::THERMOSTAT: return size == Size::Q || size == Size::L;
-    case Type::GROUP: return true;
+    case Type::BUTTON: return size != Size::L && size != Size::F;
+    case Type::THERMOSTAT: return size == Size::Q || size == Size::L || size == Size::F;
+    case Type::GROUP: return size != Size::F;
     case Type::LEVEL: return size == Size::Q || size == Size::L;
-    case Type::BATTERY: return true;
-    case Type::STATUS: return size != Size::L;
+    case Type::BATTERY: return size != Size::F;
+    case Type::STATUS: return size != Size::L && size != Size::F;
     default: return false;
   }
 }
@@ -216,6 +221,8 @@ Tiles &get() {
   return instance;
 }
 
+void Tiles::set_screen_width(int width) { g_cell_w = std::max(60, (width - 18) / 2); }
+
 void Tiles::setup(lv_obj_t *page_1, lv_obj_t *page_2, lv_obj_t *page_3, lv_obj_t *page_4, const Fonts &fonts,
                   InputCallback on_input) {
   this->pages_[0] = page_1;
@@ -287,7 +294,7 @@ bool Tiles::set(int page, int slot, int col, int row, const std::string &size_na
   int index = (page - 1) * SLOTS + slot;
   const std::string icon_glyph = icon_text(icon);
 
-  int w = (cols == 2) ? 308 : 151;
+  int w = (cols == 2) ? wide_w() : cell_w();
   int h = row_y(row + rows) - 6 - row_y(row);
   t->width = w;
   t->height = h;
@@ -439,6 +446,22 @@ bool Tiles::set(int page, int slot, int col, int row, const std::string &size_na
         lv_obj_align(plus, LV_ALIGN_BOTTOM_RIGHT, -2, 0);
         t->setpoint_label = make_label(box, f.label, COLOR_LABEL, "–");
         lv_obj_align(t->setpoint_label, LV_ALIGN_BOTTOM_MID, 0, -3);
+      } else if (size == Size::F) {
+        // the whole page: a big arc with the current temperature, below it - setpoint + across the tile
+        int d = std::min(w - 40, h - 86);
+        lv_obj_t *arc = make_arc(box, d);
+        t->arc = arc;
+        lv_obj_set_pos(arc, (w - d) / 2, 30);
+        lv_obj_set_style_arc_width(arc, 12, LV_PART_MAIN);
+        lv_obj_set_style_arc_width(arc, 12, LV_PART_INDICATOR);
+        t->value_label = make_label(box, f.large, COLOR_VALUE, "–");
+        lv_obj_align_to(t->value_label, arc, LV_ALIGN_CENTER, 0, 0);
+        lv_obj_t *minus = make_step_button(box, f.icons, GLYPH_MINUS, code, 56, 44);
+        lv_obj_t *plus = make_step_button(box, f.icons, GLYPH_PLUS, code + STEP_UP, 56, 44);
+        lv_obj_align(minus, LV_ALIGN_BOTTOM_LEFT, 8, -8);
+        lv_obj_align(plus, LV_ALIGN_BOTTOM_RIGHT, -8, -8);
+        t->setpoint_label = make_label(box, f.large, COLOR_VALUE, "–");
+        lv_obj_align(t->setpoint_label, LV_ALIGN_BOTTOM_MID, 0, -14);
       } else {
         lv_obj_t *minus = make_step_button(box, f.icons, GLYPH_MINUS, code, 40, 34);
         lv_obj_t *plus = make_step_button(box, f.icons, GLYPH_PLUS, code + STEP_UP, 40, 34);
@@ -649,7 +672,7 @@ bool Tiles::set(int page, int slot, int col, int row, const std::string &size_na
         lv_obj_align(t->value_label, LV_ALIGN_BOTTOM_LEFT, 9, -6);
       } else {
         t->value_label = make_label(box, f.large, COLOR_VALUE, "–");
-        lv_obj_set_pos(t->value_label, 150, 30);
+        lv_obj_set_pos(t->value_label, wide_w() / 2 - 4, 30);
       }
       break;
     }
@@ -786,7 +809,7 @@ void Tiles::set_toggle(int page, int slot, bool show) {
   else lv_obj_add_flag(t->sw, LV_OBJ_FLAG_HIDDEN);
   // a small or wide switch with an icon: the name stands right of it, as wide as the toggle leaves room
   if (t->label != nullptr && t->icon != nullptr && t->size != Size::Q) {
-    int w = t->size == Size::W ? 308 : 151;
+    int w = t->size == Size::W ? wide_w() : cell_w();
     lv_obj_set_width(t->label, w - 47 - 9 - (show ? 54 : 0));
     lv_obj_align(t->label, LV_ALIGN_LEFT_MID, 47, 0);
   }
@@ -810,7 +833,7 @@ void Tiles::place_icon_(Tile &t, const std::string &glyph, bool named, int w, in
   t.icon = make_label(t.box, f.icons, COLOR_LABEL, glyph.c_str());
   if (t.label != nullptr && !named) lv_obj_add_flag(t.label, LV_OBJ_FLAG_HIDDEN);
 
-  if (t.size == Size::L) {
+  if (t.size == Size::L || t.size == Size::F) {
     lv_obj_set_pos(t.icon, 9, 4);
     if (t.label != nullptr) {
       lv_obj_set_width(t.label, lv_obj_get_width(t.label) - ICON_W);
@@ -900,8 +923,10 @@ void Tiles::show_setpoint_(Tile &t) {
   lv_label_set_text(t.setpoint_label, buf);
   if (t.size == Size::Q) {
     lv_obj_align(t.setpoint_label, LV_ALIGN_BOTTOM_MID, 0, -3);
+  } else if (t.size == Size::F) {
+    lv_obj_align(t.setpoint_label, LV_ALIGN_BOTTOM_MID, 0, -14);
   } else {
-    int d = 78, w = 308;
+    int d = 78, w = wide_w();
     int mid = 20 + d + (w - 20 - d) / 2;
     lv_obj_update_layout(t.setpoint_label);
     lv_obj_align(t.setpoint_label, LV_ALIGN_LEFT_MID, mid - lv_obj_get_width(t.setpoint_label) / 2, 10);
@@ -1065,7 +1090,7 @@ void Tiles::set_item(int page, int slot, int index, const std::string &label, co
         lv_obj_align(it.value_label, LV_ALIGN_BOTTOM_RIGHT, -9, -8);
       } else {
         it.value_label = make_label(t->box, f.medium, it.base, "–");
-        lv_obj_set_pos(it.value_label, 150, 72);
+        lv_obj_set_pos(it.value_label, wide_w() / 2 - 4, 72);
       }
     }
   }

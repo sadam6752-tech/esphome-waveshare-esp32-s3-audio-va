@@ -21,7 +21,8 @@ static const size_t HISTORY = 60;
 // the extra values of a tile (tile_item): the rows of a group, the second amount of a level or a battery
 static const int ITEMS = 4;
 
-enum class Size : uint8_t { S, Q, W, L };
+// F: the whole page (2 x 4 cells), only a thermostat
+enum class Size : uint8_t { S, Q, W, L, F };
 enum class Type : uint8_t { NONE, VALUE, GAUGE, BAR, CHART, SWITCH, DIMMER, BUTTON, THERMOSTAT, GROUP, LEVEL, BATTERY, STATUS };
 
 struct Fonts {
@@ -99,6 +100,8 @@ struct Tile {
 
 class Tiles {
  public:
+  // the width of the screen in its landscape position; 320 unless set (before the first tile)
+  void set_screen_width(int width);
   void setup(lv_obj_t *page_1, lv_obj_t *page_2, lv_obj_t *page_3, lv_obj_t *page_4, const Fonts &fonts,
              InputCallback on_input);
 

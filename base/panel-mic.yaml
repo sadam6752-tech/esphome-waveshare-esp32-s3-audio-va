@@ -75,12 +75,14 @@ micro_wake_word:
               # word counts only in the window a tap on the clock opens (touch_listen).
               condition:
                 lambda: |-
-                  return id(player)->state == media_player::MEDIA_PLAYER_STATE_ANNOUNCING ||
+                  // a locked screen does not listen either: the session would show over the lock
+                  return screenlock::get().locked() ||
+                         id(player)->state == media_player::MEDIA_PLAYER_STATE_ANNOUNCING ||
                          (id(va)->is_running() && id(voice_phase) >= 2) ||
                          (!id(va)->is_running() && id(player)->state == media_player::MEDIA_PLAYER_STATE_PLAYING &&
                           !id(touch_listen)->is_running());
               then:
-                - logger.log: "Wake word while the panel speaks, thinks or plays music, ignored"
+                - logger.log: "Wake word while locked, speaking, thinking or playing music, ignored"
               else:
                 - if:
                     condition: voice_assistant.is_running

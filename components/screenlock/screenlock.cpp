@@ -144,7 +144,7 @@ void ScreenLock::show_keypad_() {
   this->keypad_since_ = millis();
   lv_obj_t *k = lv_obj_create(lv_layer_top());
   this->keypad_ = k;
-  lv_obj_set_size(k, 320, 240);
+  lv_obj_set_size(k, this->width_, 240);
   lv_obj_set_pos(k, 0, 0);
   lv_obj_set_style_bg_color(k, lv_color_hex(COLOR_BG), 0);
   lv_obj_set_style_bg_opa(k, LV_OPA_COVER, 0);
@@ -173,8 +173,10 @@ void ScreenLock::show_keypad_() {
   for (int i = 0; i < 12; i++) {
     int key = KEYS[i];
     lv_obj_t *b = lv_button_create(k);
-    lv_obj_set_size(b, 96, 42);
-    lv_obj_set_pos(b, 8 + (i % 3) * 104, 50 + (i / 3) * 47);
+    // three keys across the screen: 96 px wide on 320 px, 70 on 240 px
+    int key_w = (this->width_ - 24) / 3 - 8;
+    lv_obj_set_size(b, key_w, 42);
+    lv_obj_set_pos(b, 8 + (i % 3) * (key_w + 8), 50 + (i / 3) * 47);
     lv_obj_set_style_bg_color(b, lv_color_hex(COLOR_KEY), 0);
     lv_obj_set_style_bg_color(b, lv_color_hex(COLOR_KEY_PRESSED), LV_STATE_PRESSED);
     lv_obj_set_style_radius(b, 10, 0);

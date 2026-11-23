@@ -1,0 +1,235 @@
+###############################################################################
+# Waveshare ESP32-S3-Touch-LCD-1.54 (1.54 inch, 240x240 ST7789V2, touch CST816, in a square case) as a TILE
+# PANEL and voice satellite. The board brings what the 2 inch panel gets on its header: the audio of the
+# voice satellite (ES8311 codec, NS4150B amplifier, speaker, ES7210 with two microphones). So this file is
+# the tile panel (panel-lcd2.yaml) with the voice of base/panel-mic.yaml, moved to the pins of this board;
+# included after both (release-panel154.yaml).
+#
+# Pins (Waveshare examples ESP32-S3-Touch-LCD-1.54, ESP-IDF 01_factory and Arduino):
+#   LCD SPI   SCK GPIO38, MOSI GPIO39, CS GPIO21, DC GPIO45, RST GPIO40, backlight GPIO46 (PWM, active high)
+#   I2C       SDA GPIO42, SCL GPIO41: ES8311 0x18, ES7210 0x40, touch CST816 0x15, IMU QMI8658
+#   touch     INT GPIO48, RST GPIO47
+#   I2S       MCLK GPIO8, BCLK GPIO9, LRCK GPIO10, DIN GPIO11 (ES7210), DOUT GPIO12 (ES8311); amplifier GPIO7
+#   buttons   BOOT GPIO0, GPIO4, GPIO5 (active low)
+#   battery   ADC GPIO1 (1:3), charging GPIO3, power hold GPIO2 (high keeps the board on from the battery)
+#   TF card   CLK GPIO16, CMD GPIO15, D0 GPIO17 (not used)
+#
+# The ES8311 and the ES7210 share BCLK/LRCK, as on the voice satellite (base/core.yaml): the microphone bus
+# is the master of the clock, the speaker bus its slave, both 16 bit; so the speaker runs at the 16 kHz of the
+# microphone. No echo cancellation in ESPHome (the ES7210 reference channel is not used).
+#
+# The screen is square: the grid of the tiles stays 2 columns x 4 rows (the editor of the adapter works
+# unchanged), a cell is 111 x 52 px; the widgets of the 320 px panel are narrowed at boot.
+###############################################################################
+
+substitutions:
+  name: sd-panel154
+  friendly_name: "Tile Panel 1.54"
+
+esphome:
+  on_boot:
+    # after the tiles and the lock are set up (-150): their grid and the widgets of the 320 px panel to 240 px
+    - priority: -160
+      then:
+        - lambda: |-
+            tiles::get().set_screen_width(240);
+            screenlock::get().set_screen_width(240);
+            // clock page: the title of the media bar has no room next to its four buttons
+            lv_obj_add_flag(id(lbl_media_title), LV_OBJ_FLAG_HIDDEN);
+            lv_obj_set_style_text_font(id(lbl_date), id(font_small)->get_lv_font(), 0);
+            lv_obj_set_width(id(ota_bar), 200);
+            // system page and its question
+            lv_obj_set_width(id(lbl_system), 212);
+            lv_obj_set_width(id(btn_restart), 110);
+            lv_obj_set_width(id(btn_update), 110);
+            lv_obj_set_width(id(btn_restart_yes), 98);
+            lv_obj_set_width(id(btn_restart_no), 98);
+            // settings: the slider across, the two lists under their names
+            lv_obj_set_width(id(sl_brightness), 200);
+            lv_obj_set_width(id(lbl_set_screen_off), 110);
+            lv_obj_set_width(id(lbl_set_language), 110);
+            lv_obj_set_x(id(dd_screen_off)->obj, 124);
+            lv_obj_set_width(id(dd_screen_off)->obj, 106);
+            lv_obj_set_x(id(dd_language)->obj, 124);
+            lv_obj_set_width(id(dd_language)->obj, 106);
+            // voice box: Ja / Nein side by side
+            lv_obj_set_width(id(btn_confirm_yes), 100);
+            lv_obj_set_width(id(btn_confirm_no), 100);
+
+# the clock "00:00" at 96 px is wider than 240 px
+font:
+  - id: !extend font_clock
+    size: 72
+
+spi:
+  - id: !extend lcd_spi
+    clk_pin: GPIO38
+    mosi_pin: GPIO39
+    miso_pin: !remove
+
+i2c:
+  - id: !extend bus_i2c
+    sda: GPIO42
+    scl: GPIO41
+    # at 400 kHz the ES7210 did not answer its setup (as on the voice satellite: 100 kHz)
+    frequency: 100kHz
+
+display:
+  - id: !extend lcd
+    cs_pin: GPIO21
+    dc_pin: GPIO45
+    reset_pin: GPIO40
+    # inverted colours and blue first, as panel-lcd2.yaml: with rgb (the Waveshare example) the blue accent came out
+    # yellow
+    dimensions:
+      width: 240
+      height: 240
+
+touchscreen:
+  - id: !extend touch
+    interrupt_pin: GPIO48
+    reset_pin: GPIO47
+
+output:
+  - id: !extend lcd_backlight_pwm
+    pin: GPIO46
+  # Power hold: from the battery the board stays on only while this is high (Waveshare bsp_power_manager).
+  - platform: gpio
+    id: power_hold
+    pin: GPIO2
+
+# upright in its case; turned by the IMU (interval below)
+lvgl:
+  rotation: 0
+
+# Audio as on the voice satellite: the microphone bus (ES7210) masters the shared clock, the speaker bus
+# (ES8311) follows it.
+i2s_audio:
+  - id: !extend i2s_mic
+    i2s_mclk_pin: GPIO8
+    i2s_bclk_pin:
+      number: GPIO9
+      allow_other_uses: true
+    i2s_lrclk_pin:
+      number: GPIO10
+      allow_other_uses: true
+  - id: !extend i2s_out
+    i2s_bclk_pin:
+      number: GPIO9
+      allow_other_uses: true
+    i2s_lrclk_pin:
+      number: GPIO10
+      allow_other_uses: true
+
+audio_adc:
+  - platform: es7210
+    id: adc_mic
+    i2c_id: bus_i2c
+    mic_gain: 24db
+
+audio_dac:
+  - platform: es8311
+    id: es8311_dac
+    i2c_id: bus_i2c
+
+microphone:
+  - id: !extend panel_mic
+    i2s_din_pin: GPIO11
+    # 16 bit: as the clock master the microphone sets the slot width the ES8311 expects
+    bits_per_sample: 16bit
+    channel: !remove
+    correct_dc_offset: !remove
+
+speaker:
+  - id: !extend i2s_speaker
+    i2s_dout_pin: GPIO12
+    i2s_mode: secondary
+    audio_dac: es8311_dac
+    sample_rate: 16000
+
+# The ES7210 at 24 dB is louder than the INMP441 of base/panel-mic.yaml: no extra gain (as base/core.yaml).
+micro_wake_word:
+  microphone:
+    gain_factor: 1
+
+voice_assistant:
+  microphone:
+    gain_factor: 1
+
+switch:
+  # NS4150B amplifier: off at boot (it would amplify the idle DAC line as a hiss), on with the first sound
+  - platform: gpio
+    id: amp_enable
+    name: Amplifier
+    icon: mdi:speaker
+    entity_category: config
+    restore_mode: ALWAYS_OFF
+    pin: GPIO7
+
+sensor:
+  - id: !extend battery_voltage
+    pin: GPIO1
+  # The 2 inch panel turns only between its two landscape positions (interval of panel-lcd2.yaml on imu_orientation);
+  # the square screen turns to all four sides (screen_turn below), so that one gets no values here.
+  - id: !extend imu_orientation
+    internal: true
+    filters:
+      - lambda: return {};
+  - platform: motion
+    motion_id: imu
+    type: orientation
+    id: imu_turn
+    name: "Screen orientation"
+    entity_category: diagnostic
+
+binary_sensor:
+  - platform: gpio
+    id: battery_charging
+    name: "Battery charging"
+    entity_category: diagnostic
+    pin:
+      number: GPIO3
+      mode: INPUT_PULLUP
+      inverted: true
+
+interval:
+  # The screen follows the board to every side; a new position counts after 2 s (a turn in the hand does not
+  # flicker), flat keeps the last one. IMU_UPRIGHT: what the IMU reports with the USB port at the bottom (the screen
+  # as built); TURN: +1 or -1, the direction of the IMU against the screen.
+  - interval: 250ms
+    then:
+      - lambda: |-
+          static const int IMU_UPRIGHT = 90, TURN = 1;
+          static int seen = -1, shown = 0;
+          static uint32_t since = 0;
+          float o = id(imu_turn).state;
+          if (std::isnan(o)) return;
+          int angle = (int(o + 0.5f) % 360 + 360) % 360;
+          uint32_t now = millis();
+          if (angle != seen) { seen = angle; since = now; return; }
+          int rotation = (((angle - IMU_UPRIGHT) * TURN) % 360 + 360) % 360;
+          if (rotation != shown && now - since > 2000) {
+            shown = rotation;
+            id(lvgl_comp)->set_rotation(rotation);
+            ESP_LOGI("panel", "IMU %d degrees: screen turned to %d", angle, rotation);
+          }
+  # The ES7210 sometimes does not answer its setup at boot (seen after an OTA restart, once after a USB flash; the
+  # bus scan finds it at 0x40 a moment later) and stays without microphones until a restart. Its setup is run
+  # again every 2 s until it goes through.
+  - interval: 2s
+    then:
+      - lambda: |-
+          static int tries = 0;
+          if (!id(adc_mic)->is_failed() || tries >= 30) return;
+          tries++;
+          id(adc_mic)->reset_to_construction_state();
+          id(adc_mic)->setup();
+          if (id(adc_mic)->is_failed()) ESP_LOGW("panel", "ES7210 setup failed again (try %d)", tries);
+          else ESP_LOGI("panel", "ES7210 set up on try %d", tries);
+  - interval: 200ms
+    then:
+      - lambda: |-
+          static bool held = false;
+          if (!held) { held = true; id(power_hold).turn_on(); }
+          if (!id(amp_enable).state && id(player)->state != media_player::MEDIA_PLAYER_STATE_IDLE)
+            id(amp_enable).turn_on();

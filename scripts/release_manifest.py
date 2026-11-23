@@ -19,12 +19,14 @@ NAMES = {
     "core": "Waveshare Voice",
     "panel": "Tile Panel (ESP32-S3-Touch-LCD-2)",
     "panel-mic": "Tile Panel with microphone (ESP32-S3-Touch-LCD-2)",
+    "panel154": "Tile Panel 1.54 (ESP32-S3-Touch-LCD-1.54)",
 }
 SUMMARIES = {
     "display": "ESP32-S3-AUDIO-Board with the Waveshare 2.8inch Capacitive Touch LCD",
     "core": "ESP32-S3-AUDIO-Board without a display",
     "panel": "Waveshare ESP32-S3-Touch-LCD-2 as a tile panel for ioBroker.satellite-display",
     "panel-mic": "Tile panel with an INMP441 microphone: also a voice satellite for ioBroker.assistant",
+    "panel154": "Waveshare ESP32-S3-Touch-LCD-1.54 as a tile panel and voice satellite",
 }
 
 

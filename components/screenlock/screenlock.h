@@ -30,6 +30,8 @@ class ScreenLock {
  public:
   // Loads the settings from flash; locked at boot when the lock is on.
   void setup(const Fonts &fonts, ReportCallback report);
+  // the width of the screen (the keypad covers it); 320 unless set
+  void set_screen_width(int width) { this->width_ = width; }
 
   // From ioBroker: lock on/off, SHA-256 of "satellite-display:" + PIN as 64 hex digits, its length, relock mode
   // and minutes. Stored in flash when it changed.
@@ -67,6 +69,7 @@ class ScreenLock {
   void report_();
 
   Fonts fonts_{};
+  int width_{320};
   ReportCallback report_cb_;
   bool enabled_{false};
   bool locked_{false};
