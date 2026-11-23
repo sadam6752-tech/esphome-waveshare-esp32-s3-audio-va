@@ -2,6 +2,12 @@
 
 ## [Unreleased]
 
+## [2.6.3] - 2026-11-23
+
+### Changed
+- **Tile panels: the volume scale on every volume change**, like on the voice satellite: not only for the volume
+  buttons of the media bar but also for a change by voice or from ioBroker, and on every page (tiles too), for 2 s.
+
 ## [2.6.2] - 2026-11-23
 
 ### Added
