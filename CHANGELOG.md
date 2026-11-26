@@ -2,6 +2,13 @@
 
 ## [Unreleased]
 
+## [2.6.4] - 2026-11-26
+
+### Changed
+- **Tiles: long status text fits** (such as the "now playing" title of a radio tile). On a square status tile a
+  text that does not fit in one line of the value font is shown in the font of the tile name, in up to 2 lines;
+  short values look as before. Status tiles now show up to 48 characters (was 32), with dots where they do not fit.
+
 ## [2.6.3] - 2026-11-23
 
 ### Changed

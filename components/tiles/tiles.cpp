@@ -1000,7 +1000,23 @@ void Tiles::set_value(int page, int slot, float value) {
 void Tiles::set_text(int page, int slot, const std::string &text) {
   Tile *t = this->tile_(page, slot);
   if (t == nullptr || (t->type != Type::VALUE && t->type != Type::STATUS) || t->value_label == nullptr) return;
-  lv_label_set_text(t->value_label, utf8_prefix(text, 32).c_str());
+  if (t->type != Type::STATUS) {
+    lv_label_set_text(t->value_label, utf8_prefix(text, 32).c_str());
+    return;
+  }
+  // a status text such as "now playing": up to 48 characters, with dots where it does not fit
+  std::string shown = utf8_prefix(text, 48);
+  if (t->size == Size::Q) {
+    // one line of the value font when it fits, else the font of the tile name in up to 2 lines
+    const Fonts &f = this->fonts_;
+    lv_obj_update_layout(t->value_label);
+    lv_point_t one;
+    lv_text_get_size(&one, shown.c_str(), f.medium, 0, 0, LV_COORD_MAX, LV_TEXT_FLAG_NONE);
+    bool fits = one.x <= lv_obj_get_width(t->value_label);
+    lv_obj_set_style_text_font(t->value_label, fits ? f.medium : f.label, 0);
+    lv_obj_set_height(t->value_label, fits ? LV_SIZE_CONTENT : 2 * lv_font_get_line_height(f.label));
+  }
+  lv_label_set_text(t->value_label, shown.c_str());
 }
 
 void Tiles::set_state(int page, int slot, bool on) {
